@@ -1,59 +1,188 @@
 const compromise = require('compromise');
 
 class KLMapper {
-  
-  // Rule-based Bloom's taxonomy keyword mapping
+
+  // Optimized Bloom taxonomy mapping (5 Levels Only)
   static bloomKeywords = {
-    K1: ['define', 'list', 'state', 'name', 'label', 'recall', 'identify', 'describe', 'what is', 'who is', 'when', 'where'],
-    K2: ['explain', 'discuss', 'summarize', 'interpret', 'compare', 'classify', 'give example', 'illustrate', 'describe how', 'why'],
-    K3: ['apply', 'solve', 'demonstrate', 'calculate', 'implement', 'use', 'execute', 'compute', 'show', 'find'],
-    K4: ['analyze', 'differentiate', 'distinguish', 'examine', 'break down', 'investigate', 'compare and contrast', 'categorize'],
-    K5: ['evaluate', 'justify', 'critique', 'assess', 'recommend', 'argue', 'judge', 'defend', 'support'],
-    K6: ['design', 'develop', 'construct', 'formulate', 'create', 'devise', 'plan', 'build', 'compose', 'generate']
+
+    // K5 = Evaluate + Create + Design (Merged level)
+    K5: {
+      primary: [
+        'evaluate', 'justify', 'critique', 'assess', 'recommend', 'judge',
+        'defend', 'argue', 'validate', 'prioritize',
+        'design', 'develop', 'construct', 'formulate', 'create',
+        'devise', 'plan', 'build', 'compose', 'generate', 'invent', 'propose', 'architect'
+      ],
+      phrases: [
+        'critically evaluate', 'justify the', 'assess the', 'recommend the',
+        'critique the', 'design a', 'develop a', 'create a',
+        'formulate a', 'build a', 'propose a', 'construct a'
+      ]
+    },
+
+    K4: {
+      primary: [
+        'analyze', 'analyse', 'differentiate', 'distinguish', 'examine',
+        'investigate', 'compare', 'contrast', 'categorize', 'decompose'
+      ],
+      phrases: [
+        'compare and contrast', 'differentiate between',
+        'distinguish between', 'analyze the', 'examine the'
+      ]
+    },
+
+    K3: {
+      primary: [
+        'apply', 'solve', 'demonstrate', 'calculate', 'implement',
+        'use', 'execute', 'compute', 'simulate', 'derive', 'show'
+      ],
+      phrases: [
+        'apply the', 'solve the', 'calculate the',
+        'implement the', 'demonstrate how', 'compute the'
+      ]
+    },
+
+    K2: {
+      primary: [
+        'explain', 'discuss', 'describe', 'summarize', 'interpret',
+        'classify', 'elaborate', 'illustrate', 'review'
+      ],
+      phrases: [
+        'explain how', 'explain why', 'describe the', 'discuss the',
+        'summarize the', 'interpret the',
+        'what is the need for',
+        'importance of', 'role of', 'purpose of', 'significance of',
+        'why is', 'how does', 'how do'
+      ]
+    },
+
+    K1: {
+      primary: [
+        'define', 'list', 'state', 'name', 'identify',
+        'recall', 'label', 'recognize'
+      ],
+      phrases: [
+        'define the', 'list the', 'state the', 'name the',
+        'identify the', 'what is', 'what are'
+      ]
+    }
   };
 
-  // Extract verbs from question using compromise
-  static extractVerbs(questionText) {
-    const doc = compromise(questionText);
-    const verbs = doc.verbs().out('array');
-    return verbs.map(v => v.toLowerCase());
+  static extractVerbs(text) {
+    const doc = compromise(text);
+    return doc.verbs().out('array').map(v => v.toLowerCase());
   }
 
-  // Map question to Bloom's level
+  static normalize(text) {
+    return text.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   static mapKL(questionText) {
-    const text = questionText.toLowerCase();
-    const verbs = this.extractVerbs(questionText);
-    
-    let detectedLevel = 'K1';
-    let detectedVerb = '';
-    let confidence = 50;
+    const rawText = questionText;
+    const text = this.normalize(questionText);
+    const verbs = this.extractVerbs(rawText);
 
-    // Check for exact keyword matches first
-    for (const [level, keywords] of Object.entries(this.bloomKeywords)) {
-      for (const keyword of keywords) {
-        if (text.includes(keyword)) {
-          detectedLevel = level;
-          detectedVerb = keyword;
-          confidence = 90;
-          return { level: detectedLevel, verb: detectedVerb, confidence };
+    // Priority order (highest cognitive level first)
+    const levels = ['K5', 'K4', 'K3', 'K2', 'K1'];
+
+    for (const level of levels) {
+      const { primary, phrases } = this.bloomKeywords[level];
+
+      // Phrase-level detection
+      for (const phrase of phrases) {
+        if (text.includes(phrase)) {
+          return {
+            level,
+            verb: phrase,
+            confidence: 96,
+            method: 'Semantic phrase match'
+          };
+        }
+      }
+
+      // Keyword detection
+      for (const kw of primary) {
+        const regex = new RegExp(`(^|\\s)${kw}(\\s|$)`, 'i');
+        if (regex.test(text)) {
+          return {
+            level,
+            verb: kw,
+            confidence: 90,
+            method: 'Action verb match'
+          };
+        }
+      }
+
+      // NLP fallback
+      for (const v of verbs) {
+        if (primary.includes(v)) {
+          return {
+            level,
+            verb: v,
+            confidence: 85,
+            method: 'NLP verb match'
+          };
         }
       }
     }
 
-    // If no exact match, check extracted verbs
-    for (const verb of verbs) {
-      for (const [level, keywords] of Object.entries(this.bloomKeywords)) {
-        if (keywords.includes(verb)) {
-          detectedLevel = level;
-          detectedVerb = verb;
-          confidence = 75;
-          return { level: detectedLevel, verb: detectedVerb, confidence };
-        }
-      }
+    // Structural reasoning rules
+    if (
+      text.includes('need for') ||
+      text.includes('importance of') ||
+      text.includes('role of') ||
+      text.includes('purpose of') ||
+      text.includes('significance of')
+    ) {
+      return {
+        level: 'K2',
+        verb: 'explain',
+        confidence: 88,
+        method: 'Conceptual intent rule'
+      };
     }
 
-    // Default to K1 with low confidence
-    return { level: 'K1', verb: 'not detected', confidence: 40 };
+    if (text.startsWith('why')) {
+      return {
+        level: 'K2',
+        verb: 'explain',
+        confidence: 85,
+        method: 'Why-question reasoning'
+      };
+    }
+
+    if (text.startsWith('how')) {
+      return {
+        level: 'K2',
+        verb: 'explain',
+        confidence: 80,
+        method: 'How-question pattern'
+      };
+    }
+
+    // Pure definitional detection
+    if (
+      (text.startsWith('what is') || text.startsWith('what are')) &&
+      (text.includes('definition') || text.includes('mean by') || text.includes('define'))
+    ) {
+      return {
+        level: 'K1',
+        verb: 'define',
+        confidence: 80,
+        method: 'Pure definition pattern'
+      };
+    }
+
+    // Fallback
+    return {
+      level: 'K1',
+      verb: 'undetected',
+      confidence: 45,
+      method: 'Heuristic fallback'
+    };
   }
 }
 

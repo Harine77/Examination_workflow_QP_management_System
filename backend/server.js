@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+
 const sequelize = require('./config/database');
 const Course = require('./models/Course');
 const CourseOutcome = require('./models/CourseOutcome');
@@ -13,11 +14,11 @@ const courseRoutes = require('./routes/courseRoutes');
 const questionRoutes = require('./routes/questionRoutes');
 
 const app = express();
+app.use(express.json()); 
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json());app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/courses', courseRoutes);

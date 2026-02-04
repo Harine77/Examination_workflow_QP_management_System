@@ -6,7 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 const API_URL = 'http://localhost:5000/api';
 
 function App() {
-  const [step, setStep] = useState(1); // Multi-step form
+  const [step, setStep] = useState(1);
   const [examFormat, setExamFormat] = useState(''); // CAT, SAT, SEM
   const [courseInfo, setCourseInfo] = useState({
     courseCode: '',
@@ -15,8 +15,10 @@ function App() {
     department: '',
     degree: '',
     branch: '',
-    catNumber: '', // CAT-I, CAT-II, CAT-III
-    examDate: ''
+    catNumber: '',
+    examDate: '',
+    month: '',
+    year: ''
   });
   
   const [courseOutcomes, setCourseOutcomes] = useState([
@@ -27,38 +29,81 @@ function App() {
     { coNumber: 'CO5', description: '', keywords: '' }
   ]);
 
-  const [questions, setQuestions] = useState({
-    partA: [
-      { number: 1, text: '', kl: '', co: '', pi: '', marks: 2 },
-      { number: 2, text: '', kl: '', co: '', pi: '', marks: 2 },
-      { number: 3, text: '', kl: '', co: '', pi: '', marks: 2 },
-      { number: 4, text: '', kl: '', co: '', pi: '', marks: 2 }
-    ],
-    partB: [
-      { number: 5, text: '', kl: '', co: '', pi: '', marks: 6 },
-      { number: 6, text: '', kl: '', co: '', pi: '', marks: 6 },
-      { number: 7, text: '', kl: '', co: '', pi: '', marks: 6 }
-    ],
-    partC: [
-      { number: 8, text: '', kl: '', co: '', pi: '', marks: 12, isOr: false },
-      { number: 9, text: '', kl: '', co: '', pi: '', marks: 12, isOr: true },
-      { number: 10, text: '', kl: '', co: '', pi: '', marks: 12, isOr: false },
-      { number: 11, text: '', kl: '', co: '', pi: '', marks: 12, isOr: true }
-    ]
-  });
-
+  const [questions, setQuestions] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [courseId, setCourseId] = useState(null);
+
+  // Initialize questions based on exam format
+  const initializeQuestions = (format) => {
+    if (format === 'SEM') {
+      return {
+        partA: Array.from({ length: 5 }, (_, i) => ({
+          number: i + 1,
+          text: '',
+          kl: '',
+          co: '',
+          pi: '',
+          marks: 2
+        })),
+        partB: Array.from({ length: 5 }, (_, i) => ({
+          number: i + 6,
+          text: '',
+          kl: '',
+          co: '',
+          pi: '',
+          marks: 6
+        })),
+        partC: Array.from({ length: 10 }, (_, i) => ({
+          number: i + 11,
+          text: '',
+          kl: '',
+          co: '',
+          pi: '',
+          marks: 12,
+          isOr: i % 2 === 1 // Questions 12, 14, 16, 18, 20 have OR
+        }))
+      };
+    } else {
+      // CAT/SAT format
+      return {
+        partA: Array.from({ length: 4 }, (_, i) => ({
+          number: i + 1,
+          text: '',
+          kl: '',
+          co: '',
+          pi: '',
+          marks: 2
+        })),
+        partB: Array.from({ length: 3 }, (_, i) => ({
+          number: i + 5,
+          text: '',
+          kl: '',
+          co: '',
+          pi: '',
+          marks: 6
+        })),
+        partC: Array.from({ length: 4 }, (_, i) => ({
+          number: i + 8,
+          text: '',
+          kl: '',
+          co: '',
+          pi: '',
+          marks: 12,
+          isOr: i % 2 === 1 // Questions 9, 11 have OR
+        }))
+      };
+    }
+  };
 
   // Step 1: Select Exam Format
   const selectExamFormat = (format) => {
     setExamFormat(format);
+    setQuestions(initializeQuestions(format));
     setStep(2);
   };
 
-  // Step 2: Submit Course Info and COs
+  // Step 2: Submit Course Info
   const submitCourseInfo = async () => {
-    // Validation
     if (!courseInfo.courseCode || !courseInfo.courseName) {
       toast.error('Please fill course code and name');
       return;
@@ -71,7 +116,6 @@ function App() {
     }
 
     try {
-      // Create course with outcomes
       const response = await axios.post(`${API_URL}/courses`, {
         courseCode: courseInfo.courseCode,
         courseName: courseInfo.courseName,
@@ -111,7 +155,6 @@ function App() {
 
       const result = response.data.data;
 
-      // Update question with results
       setQuestions(prev => ({
         ...prev,
         [part]: prev[part].map((q, i) => 
@@ -146,6 +189,39 @@ function App() {
     }));
   };
 
+  // Update PI
+  const updateQuestionPI = (part, index, pi) => {
+    setQuestions(prev => ({
+      ...prev,
+      [part]: prev[part].map((q, i) => 
+        i === index ? { ...q, pi } : q
+      )
+    }));
+  };
+
+  // Get exam details for display
+  const getExamDetails = () => {
+    if (examFormat === 'CAT' || examFormat === 'SAT') {
+      return {
+        title: `Continuous Assessment Test${examFormat === 'CAT' ? ` - ${courseInfo.catNumber}` : ''}`,
+        time: '90 Minutes',
+        maxMarks: '50 Marks',
+        partADesc: '4 × 2 = 8 Marks',
+        partBDesc: '3 × 6 = 18 Marks',
+        partCDesc: '2 × 12 = 24 Marks'
+      };
+    } else {
+      return {
+        title: `End Semester Examination - ${courseInfo.month} ${courseInfo.year}`,
+        time: 'Three Hours',
+        maxMarks: '100 Marks',
+        partADesc: '5 × 2 = 10 Marks',
+        partBDesc: '5 × 6 = 30 Marks',
+        partCDesc: '5 × 12 = 60 Marks'
+      };
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -155,7 +231,7 @@ function App() {
             📝 Question Paper CO & KL Mapper
           </h1>
           <p className="text-gray-600 text-lg">
-            SSN College of Engineering - CAT/SAT/SEM Exam Generator
+            SSN College of Engineering - Automated Question Paper Generator
           </p>
         </div>
 
@@ -182,27 +258,33 @@ function App() {
             <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
               Select Exam Format
             </h2>
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 gap-6 max-w-3xl mx-auto">
               <button
                 onClick={() => selectExamFormat('CAT')}
-                className="bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl p-8 text-2xl font-bold shadow-lg transform hover:scale-105 transition-all"
+                className="bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all"
               >
-                📋 CAT
-                <p className="text-sm font-normal mt-2">Continuous Assessment Test</p>
+                <div className="text-4xl mb-3">📋</div>
+                <div className="text-2xl font-bold mb-2">CAT / SAT</div>
+                <div className="text-sm opacity-90">
+                  Continuous/Summative Assessment
+                </div>
+                <div className="mt-3 text-xs opacity-75">
+                  50 Marks • 90 Minutes
+                </div>
               </button>
-              <button
-                onClick={() => selectExamFormat('SAT')}
-                className="bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl p-8 text-2xl font-bold shadow-lg transform hover:scale-105 transition-all"
-              >
-                📝 SAT
-                <p className="text-sm font-normal mt-2">Summative Assessment Test</p>
-              </button>
+              
               <button
                 onClick={() => selectExamFormat('SEM')}
-                className="bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl p-8 text-2xl font-bold shadow-lg transform hover:scale-105 transition-all"
+                className="bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all"
               >
-                📚 SEM
-                <p className="text-sm font-normal mt-2">Semester Exam</p>
+                <div className="text-4xl mb-3">📚</div>
+                <div className="text-2xl font-bold mb-2">SEM (ESE)</div>
+                <div className="text-sm opacity-90">
+                  End Semester Examination
+                </div>
+                <div className="mt-3 text-xs opacity-75">
+                  100 Marks • 3 Hours
+                </div>
               </button>
             </div>
           </div>
@@ -257,19 +339,22 @@ function App() {
                   onChange={(e) => setCourseInfo({...courseInfo, department: e.target.value})}
                 />
               </div>
-              {examFormat === 'CAT' && (
+              
+              {(examFormat === 'CAT' || examFormat === 'SAT') && (
                 <>
                   <div>
-                    <label className="block font-semibold mb-2">CAT Number</label>
+                    <label className="block font-semibold mb-2">
+                      {examFormat === 'CAT' ? 'CAT Number' : 'SAT Number'}
+                    </label>
                     <select
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
                       value={courseInfo.catNumber}
                       onChange={(e) => setCourseInfo({...courseInfo, catNumber: e.target.value})}
                     >
                       <option value="">Select</option>
-                      <option value="I">CAT-I</option>
-                      <option value="II">CAT-II</option>
-                      <option value="III">CAT-III</option>
+                      <option value="I">I</option>
+                      <option value="II">II</option>
+                      <option value="III">III</option>
                     </select>
                   </div>
                   <div>
@@ -283,17 +368,45 @@ function App() {
                   </div>
                 </>
               )}
+
+              {examFormat === 'SEM' && (
+                <>
+                  <div>
+                    <label className="block font-semibold mb-2">Month</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., December"
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                      value={courseInfo.month}
+                      onChange={(e) => setCourseInfo({...courseInfo, month: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-2">Year</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., 2024"
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                      value={courseInfo.year}
+                      onChange={(e) => setCourseInfo({...courseInfo, year: e.target.value})}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Course Outcomes */}
             <div className="mb-6">
               <h3 className="text-xl font-bold text-gray-700 mb-4">Course Outcomes *</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Enter keywords separated by commas (these help the AI match questions to COs)
+              </p>
               {courseOutcomes.map((co, index) => (
                 <div key={co.coNumber} className="mb-4 p-4 bg-gray-50 rounded-lg">
-                  <label className="block font-semibold mb-2">{co.coNumber}</label>
+                  <label className="block font-semibold mb-2 text-indigo-600">{co.coNumber}</label>
                   <input
                     type="text"
-                    placeholder="Description (e.g., Understand the foundations of AI...)"
+                    placeholder="Description (e.g., Understand the foundations of AI and autonomous agents)"
                     className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none mb-2"
                     value={co.description}
                     onChange={(e) => {
@@ -304,8 +417,8 @@ function App() {
                   />
                   <input
                     type="text"
-                    placeholder="Keywords (comma-separated, e.g., intelligent agents, search, problem solving)"
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                    placeholder="Keywords: intelligent agents, search algorithms, problem solving, BFS, DFS, rational agent"
+                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none text-sm"
                     value={co.keywords}
                     onChange={(e) => {
                       const updated = [...courseOutcomes];
@@ -335,23 +448,49 @@ function App() {
         )}
 
         {/* STEP 3: QUESTION PAPER TEMPLATE */}
-        {step === 3 && (
+        {step === 3 && questions && (
           <div className="bg-white rounded-xl shadow-lg p-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">
-              {examFormat} Question Paper - {courseInfo.courseCode}
-            </h2>
-            <p className="text-gray-600 mb-6">{courseInfo.courseName}</p>
+            {/* Header */}
+            <div className="text-center mb-6 border-b-2 pb-6">
+              <h2 className="text-2xl font-bold text-gray-800">
+                Sri Sivasubramaniya Nadar College of Engineering, Kalavakkam – 603 110
+              </h2>
+              <p className="text-sm text-gray-600">(An Autonomous Institution, Affiliated to Anna University, Chennai)</p>
+              <h3 className="text-xl font-bold mt-4 text-indigo-700">
+                {getExamDetails().title}
+              </h3>
+              <div className="mt-2 text-sm">
+                <p><strong>Course:</strong> {courseInfo.courseCode} - {courseInfo.courseName}</p>
+                <p><strong>Time:</strong> {getExamDetails().time} | <strong>Maximum:</strong> {getExamDetails().maxMarks}</p>
+              </div>
+            </div>
+
+            {/* Bloom's Legend */}
+            <div className="bg-blue-50 p-4 rounded-lg mb-6 text-sm">
+              <strong>Knowledge Levels:</strong> K1: Remembering, K2: Understanding, K3: Applying, K4: Analyzing, K5: Evaluating, K6: Creating
+            </div>
+
+            {/* Course Outcomes Display */}
+            <div className="bg-green-50 p-4 rounded-lg mb-6">
+              <strong className="block mb-2">Course Outcomes:</strong>
+              {courseOutcomes.map(co => (
+                <div key={co.coNumber} className="text-sm mb-1">
+                  <strong className="text-green-700">{co.coNumber}:</strong> {co.description}
+                </div>
+              ))}
+            </div>
 
             {/* Part A */}
             <div className="mb-8">
               <h3 className="text-2xl font-bold text-blue-700 mb-4 border-b-2 border-blue-700 pb-2">
-                Part A (4 × 2 = 8 Marks)
+                Part A ({getExamDetails().partADesc})
               </h3>
               {questions.partA.map((q, index) => (
                 <QuestionBox
                   key={q.number}
                   question={q}
                   onTextChange={(text) => updateQuestionText('partA', index, text)}
+                  onPIChange={(pi) => updateQuestionPI('partA', index, pi)}
                   onAnalyze={() => analyzeQuestion('partA', index)}
                   analyzing={analyzing}
                 />
@@ -361,13 +500,17 @@ function App() {
             {/* Part B */}
             <div className="mb-8">
               <h3 className="text-2xl font-bold text-green-700 mb-4 border-b-2 border-green-700 pb-2">
-                Part B (3 × 6 = 18 Marks)
+                Part B ({getExamDetails().partBDesc})
               </h3>
+              {examFormat === 'SEM' && (
+                <p className="text-sm text-gray-600 mb-3 italic">(No Sub-divisions in Part-B)</p>
+              )}
               {questions.partB.map((q, index) => (
                 <QuestionBox
                   key={q.number}
                   question={q}
                   onTextChange={(text) => updateQuestionText('partB', index, text)}
+                  onPIChange={(pi) => updateQuestionPI('partB', index, pi)}
                   onAnalyze={() => analyzeQuestion('partB', index)}
                   analyzing={analyzing}
                 />
@@ -377,13 +520,17 @@ function App() {
             {/* Part C */}
             <div className="mb-8">
               <h3 className="text-2xl font-bold text-purple-700 mb-4 border-b-2 border-purple-700 pb-2">
-                Part C (2 × 12 = 24 Marks)
+                Part C ({getExamDetails().partCDesc})
               </h3>
+              {examFormat === 'SEM' && (
+                <p className="text-sm text-gray-600 mb-3 italic">(Maximum two Sub-divisions in Part-C with either 4 or 5 marks)</p>
+              )}
               {questions.partC.map((q, index) => (
                 <QuestionBox
                   key={q.number}
                   question={q}
                   onTextChange={(text) => updateQuestionText('partC', index, text)}
+                  onPIChange={(pi) => updateQuestionPI('partC', index, pi)}
                   onAnalyze={() => analyzeQuestion('partC', index)}
                   analyzing={analyzing}
                   showOr={q.isOr}
@@ -399,10 +546,10 @@ function App() {
                 ← Back
               </button>
               <button
-                onClick={() => toast.success('Download feature coming soon!')}
+                onClick={() => toast.info('PDF download feature coming in next update!')}
                 className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold"
               >
-                📥 Download Question Paper
+                📥 Download Question Paper (PDF)
               </button>
             </div>
           </div>
@@ -415,17 +562,17 @@ function App() {
 }
 
 // Question Box Component
-function QuestionBox({ question, onTextChange, onAnalyze, analyzing, showOr }) {
+function QuestionBox({ question, onTextChange, onPIChange, onAnalyze, analyzing, showOr }) {
   return (
     <div className="mb-6">
       {showOr && (
-        <div className="text-center my-2">
-          <span className="bg-gray-200 px-4 py-1 rounded-full font-bold">OR</span>
+        <div className="text-center my-3">
+          <span className="bg-gray-200 px-6 py-2 rounded-full font-bold text-gray-700">(OR)</span>
         </div>
       )}
-      <div className="border-2 border-gray-300 rounded-lg p-4">
+      <div className="border-2 border-gray-300 rounded-lg p-4 hover:border-indigo-300 transition-colors">
         <div className="flex items-start space-x-4">
-          <div className="font-bold text-lg text-gray-700 min-w-[40px]">
+          <div className="font-bold text-lg text-gray-700 min-w-[50px] pt-3">
             {question.number}.
           </div>
           <div className="flex-1">
@@ -436,42 +583,46 @@ function QuestionBox({ question, onTextChange, onAnalyze, analyzing, showOr }) {
               value={question.text}
               onChange={(e) => onTextChange(e.target.value)}
             />
-            <div className="mt-3 flex items-center space-x-4">
+            <div className="mt-3 flex items-center space-x-3 flex-wrap">
               <button
                 onClick={onAnalyze}
                 disabled={analyzing || !question.text.trim()}
-                className={`px-4 py-2 rounded-lg font-semibold ${
+                className={`px-5 py-2 rounded-lg font-semibold transition-all ${
                   analyzing || !question.text.trim()
-                    ? 'bg-gray-300 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    ? 'bg-gray-300 cursor-not-allowed text-gray-500'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg'
                 }`}
               >
-                {analyzing ? '🔄 Analyzing...' : '🤖 Auto-Detect'}
+                {analyzing ? '🔄 Analyzing...' : '🤖 Auto-Detect CO & KL'}
               </button>
               
-              {question.kl && (
-                <div className="flex space-x-4">
-                  <div className="bg-blue-100 px-4 py-2 rounded-lg">
-                    <span className="font-semibold">KL:</span>
-                    <span className="ml-2 font-bold text-blue-700">{question.kl}</span>
+              {question.kl && question.co && (
+                <>
+                  <div className="bg-blue-100 border-2 border-blue-300 px-4 py-2 rounded-lg">
+                    <span className="font-semibold text-gray-700">KL:</span>
+                    <span className="ml-2 font-bold text-blue-700 text-lg">{question.kl}</span>
                     {question.klConfidence && (
-                      <span className="ml-2 text-sm text-gray-600">({question.klConfidence}%)</span>
+                      <span className="ml-2 text-xs text-gray-600">({question.klConfidence}%)</span>
                     )}
                   </div>
-                  <div className="bg-green-100 px-4 py-2 rounded-lg">
-                    <span className="font-semibold">CO:</span>
-                    <span className="ml-2 font-bold text-green-700">{question.co}</span>
+                  <div className="bg-green-100 border-2 border-green-300 px-4 py-2 rounded-lg">
+                    <span className="font-semibold text-gray-700">CO:</span>
+                    <span className="ml-2 font-bold text-green-700 text-lg">{question.co}</span>
                     {question.coConfidence && (
-                      <span className="ml-2 text-sm text-gray-600">({question.coConfidence}%)</span>
+                      <span className="ml-2 text-xs text-gray-600">({question.coConfidence}%)</span>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    placeholder="PI"
-                    className="w-32 px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
-                    value={question.pi}
-                  />
-                </div>
+                  <div className="flex items-center">
+                    <label className="font-semibold text-gray-700 mr-2">PI:</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., 1.1.1, 2.3.1"
+                      className="w-40 px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                      value={question.pi}
+                      onChange={(e) => onPIChange(e.target.value)}
+                    />
+                  </div>
+                </>
               )}
             </div>
           </div>
