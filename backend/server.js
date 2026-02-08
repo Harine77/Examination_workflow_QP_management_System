@@ -12,6 +12,7 @@ const Question = require('./models/Question');
 
 const courseRoutes = require('./routes/courseRoutes');
 const questionRoutes = require('./routes/questionRoutes');
+const pdfRoutes = require('./routes/pdfRoutes');
 
 const app = express();
 app.use(express.json()); 
@@ -23,7 +24,7 @@ app.use(express.json());app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/courses', courseRoutes);
 app.use('/api/questions', questionRoutes);
-
+app.use('/api/pdf', pdfRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 

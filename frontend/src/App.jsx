@@ -199,6 +199,55 @@ function App() {
     }));
   };
 
+  // Download PDF
+const downloadPDF = async () => {
+  // Validate that all questions have text
+  const allParts = [...questions.partA, ...questions.partB, ...questions.partC];
+  const emptyQuestions = allParts.filter(q => !q.text.trim());
+  
+  if (emptyQuestions.length > 0) {
+    toast.warning(`Please fill all questions before downloading (${emptyQuestions.length} questions are empty)`);
+    return;
+  }
+
+  try {
+    toast.info('🔄 Generating PDF... This may take a few seconds');
+    
+    const response = await axios.post(
+      `${API_URL}/pdf/generate`,
+      {
+        courseInfo,
+        courseOutcomes,
+        questions,
+        examFormat
+      },
+      {
+        responseType: 'blob' // Important for PDF download
+      }
+    );
+
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Generate filename
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${courseInfo.courseCode}_${examFormat}${courseInfo.catNumber ? '-' + courseInfo.catNumber : ''}_${timestamp}.pdf`;
+    link.setAttribute('download', filename);
+    
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    
+    toast.success('✅ PDF downloaded successfully!');
+    
+  } catch (error) {
+    console.error('Download error:', error);
+    toast.error('Failed to generate PDF. Please try again.');
+  }
+};
+
   // Get exam details for display
   const getExamDetails = () => {
     if (examFormat === 'CAT' || examFormat === 'SAT') {
@@ -546,11 +595,11 @@ function App() {
                 ← Back
               </button>
               <button
-                onClick={() => toast.info('PDF download feature coming in next update!')}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold"
-              >
-                📥 Download Question Paper (PDF)
-              </button>
+  onClick={downloadPDF}
+  className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
+>
+  📥 Download Question Paper (PDF)
+</button>
             </div>
           </div>
         )}
