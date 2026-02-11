@@ -26,3 +26,8 @@ npm install
 cd ../frontend
 
 npm install    
+
+
+THE CREDENTIALS FOR EACH LOGIN, IS PROVIDED ON THE LOGIN PAGE ITSELF. 
+
+mail id before "/" is the username and the part after "/" is the password for the corresponding username.
