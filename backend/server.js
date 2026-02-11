@@ -2,29 +2,42 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-
 const sequelize = require('./config/database');
 const Course = require('./models/Course');
 const CourseOutcome = require('./models/CourseOutcome');
 const BloomKeyword = require('./models/BloomKeyword');
 const QuestionPaper = require('./models/QuestionPaper');
 const Question = require('./models/Question');
+const User = require('./models/user'); // NEW
+
+
+// Define User-QuestionPaper relationships
+User.hasMany(QuestionPaper, { foreignKey: 'createdBy', as: 'createdPapers' });
+User.hasMany(QuestionPaper, { foreignKey: 'reviewedBy', as: 'reviewedPapers' });
+User.hasMany(QuestionPaper, { foreignKey: 'finalizedBy', as: 'finalizedPapers' });
+
+QuestionPaper.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+QuestionPaper.belongsTo(User, { foreignKey: 'reviewedBy', as: 'reviewer' });
+QuestionPaper.belongsTo(User, { foreignKey: 'finalizedBy', as: 'finalizer' });
 
 const courseRoutes = require('./routes/courseRoutes');
 const questionRoutes = require('./routes/questionRoutes');
 const pdfRoutes = require('./routes/pdfRoutes');
+const authRoutes = require('./routes/authRoutes'); // NEW
 
 const app = express();
-app.use(express.json()); 
 
 // Middleware
 app.use(cors());
-app.use(express.json());app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/courses', courseRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/pdf', pdfRoutes);
+app.use('/api/auth', authRoutes); // NEW
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
