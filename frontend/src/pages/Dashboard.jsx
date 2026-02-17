@@ -44,7 +44,7 @@ const Dashboard = () => {
               title: 'Papers to Review',
               description: 'View submitted papers waiting for review',
               icon: '📑',
-              action: () => navigate('/papers?status=submitted'),
+              action: () => navigate('/scrutinizer'),       // ← fixed
               bgColor: 'bg-green-500',
               hoverColor: 'hover:bg-green-600'
             },
@@ -52,7 +52,7 @@ const Dashboard = () => {
               title: 'All Question Papers',
               description: 'Browse all question papers in the system',
               icon: '📚',
-              action: () => navigate('/papers'),
+              action: () => navigate('/scrutinizer'),       // ← fixed
               bgColor: 'bg-teal-500',
               hoverColor: 'hover:bg-teal-600'
             }
@@ -165,7 +165,7 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Quick Stats (Optional - can add later) */}
+        {/* Quick Stats */}
         <div className="mt-12 bg-white rounded-xl shadow-lg p-6 max-w-4xl mx-auto">
           <h3 className="text-xl font-bold text-gray-800 mb-4">Quick Overview</h3>
           <div className="grid grid-cols-3 gap-4 text-center">

@@ -11,6 +11,7 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import QuestionPapers from './pages/QuestionPapers';
 import CreatePaper from './pages/CreatePaper';
+import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
 
 function App() {
   return (
@@ -46,6 +47,16 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['faculty']}>
                   <CreatePaper />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Scrutinizer Route */}
+            <Route
+              path="/scrutinizer"
+              element={
+                <PrivateRoute allowedRoles={['scrutinizer']}>
+                  <ScrutinizerDashboard />
                 </PrivateRoute>
               }
             />
