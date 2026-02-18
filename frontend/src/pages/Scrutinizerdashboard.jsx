@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/authContext';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/scrutinizer';
 
@@ -984,7 +986,7 @@ function PipelineView({ papers }) {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-export default function ScrutinizerDashboard() {
+function ScrutinizerDashboard() {
   const [papers,  setPapers]  = useState([]);
   const [revMap,  setRevMap]  = useState({});       // "paper||qno" → review obj
   const [loading, setLoading] = useState(true);
@@ -1176,6 +1178,14 @@ export default function ScrutinizerDashboard() {
   const approvedP = papers.filter(p => p.status==='APPROVED').length;
   const flaggedP  = papers.filter(p => p.status==='NEEDS_REVISION').length;
 
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <>
       <style>{G}</style>
@@ -1189,6 +1199,32 @@ export default function ScrutinizerDashboard() {
               <button className={`sd-nav-tab ${tab==='papers'?'active':''}`}   onClick={() => setTab('papers')}>Papers</button>
               <button className={`sd-nav-tab ${tab==='pipeline'?'active':''}`} onClick={() => setTab('pipeline')}>Pipeline</button>
             </div>
+            <button 
+              onClick={handleLogout}
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: 'var(--grey4)',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = 'rgba(192, 57, 43, 0.3)';
+                e.target.style.color = '#FF6B6B';
+                e.target.style.borderColor = 'rgba(192, 57, 43, 0.5)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+                e.target.style.color = 'var(--grey4)';
+                e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+              }}
+            >
+              ← Logout
+            </button>
             <div className="sd-avatar">S</div>
           </div>
         </nav>
@@ -1368,3 +1404,5 @@ export default function ScrutinizerDashboard() {
     </>
   );
 }
+
+export default ScrutinizerDashboard;

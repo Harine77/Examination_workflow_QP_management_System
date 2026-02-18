@@ -1,8 +1,9 @@
+
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/authContext';
 import PrivateRoute from './components/PrivateRoute';
 
 // Pages
@@ -11,7 +12,33 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import QuestionPapers from './pages/QuestionPapers';
 import CreatePaper from './pages/CreatePaper';
+import ScrutinizerMainDashboard from './pages/ScrutinizerMainDashboard';
 import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
+import HODDashboard from './pages/HODDashboard';
+import PanelDashboard from './pages/PanelDashboard';
+
+// Root redirect component that checks auth
+function RootRedirect() {
+  const { user } = useAuth();
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Redirect based on role
+  switch(user.role) {
+    case 'scrutinizer':
+      return <Navigate to="/scrutinizer" replace />;
+    case 'hod':
+      return <Navigate to="/hod-dashboard" replace />;
+    case 'panel':
+    case 'panel_member':
+      return <Navigate to="/panel-dashboard" replace />;
+    case 'faculty':
+    default:
+      return <Navigate to="/dashboard" replace />;
+  }
+}
 
 function App() {
   return (
@@ -51,9 +78,33 @@ function App() {
               }
             />
 
-            {/* Scrutinizer Route */}
+            {/* Scrutinizer Routes */}
             <Route
               path="/scrutinizer"
+              element={
+                <PrivateRoute allowedRoles={['scrutinizer']}>
+                  <ScrutinizerMainDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/scrutinizer-review"
+              element={
+                <PrivateRoute allowedRoles={['scrutinizer']}>
+                  <ScrutinizerDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/scrutinizer-all-papers"
+              element={
+                <PrivateRoute allowedRoles={['scrutinizer']}>
+                  <QuestionPapers />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/scrutinizer-reviews"
               element={
                 <PrivateRoute allowedRoles={['scrutinizer']}>
                   <ScrutinizerDashboard />
@@ -61,8 +112,28 @@ function App() {
               }
             />
 
-            {/* Redirect root to dashboard or login */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            {/* HOD Route */}
+            <Route
+              path="/hod-dashboard"
+              element={
+                <PrivateRoute allowedRoles={['hod']}>
+                  <HODDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Panel Route */}
+            <Route
+              path="/panel-dashboard"
+              element={
+                <PrivateRoute allowedRoles={['panel', 'panel_member']}>
+                  <PanelDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Root: redirect based on auth status */}
+            <Route path="/" element={<RootRedirect />} />
 
             {/* 404 Not Found */}
             <Route path="*" element={
