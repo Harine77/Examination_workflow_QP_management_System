@@ -5,15 +5,22 @@ const QuestionPaper = require('../models/QuestionPaper');
 const Question = require('../models/Question');
 const Course = require('../models/Course');
 const CourseOutcome = require('../models/CourseOutcome');
+const { protect } = require('../middleware/authMiddleware');
 
-// Generate and download PDF
+// All routes require authentication
+router.use(protect);
+
+// Generate and download PDF (All authenticated users)
 router.post('/generate', async (req, res) => {
   try {
     const { courseInfo, courseOutcomes, questions, examFormat } = req.body;
     
     // Validation
     if (!courseInfo || !courseOutcomes || !questions || !examFormat) {
-      return res.status(400).json({ error: 'Missing required data' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Missing required data' 
+      });
     }
     
     // Generate PDF
@@ -30,9 +37,6 @@ router.post('/generate', async (req, res) => {
       examFormat
     });
     
-    // Optional: Save question paper record to database
-    // (We'll implement this later for the workflow)
-    
     // Send PDF as download
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${savedFile.filename}"`);
@@ -41,13 +45,14 @@ router.post('/generate', async (req, res) => {
   } catch (error) {
     console.error('PDF generation error:', error);
     res.status(500).json({ 
+      success: false,
       error: 'Failed to generate PDF',
       message: error.message 
     });
   }
 });
 
-// Get list of generated question papers
+// Get list of generated question papers (All authenticated users)
 router.get('/list', async (req, res) => {
   try {
     const fs = require('fs');
@@ -56,7 +61,11 @@ router.get('/list', async (req, res) => {
     const uploadsDir = path.join(__dirname, '../uploads/question-papers');
     
     if (!fs.existsSync(uploadsDir)) {
-      return res.json([]);
+      return res.json({
+        success: true,
+        count: 0,
+        data: []
+      });
     }
     
     const files = fs.readdirSync(uploadsDir);
@@ -69,15 +78,22 @@ router.get('/list', async (req, res) => {
       };
     }).sort((a, b) => b.createdAt - a.createdAt);
     
-    res.json(fileList);
+    res.json({
+      success: true,
+      count: fileList.length,
+      data: fileList
+    });
     
   } catch (error) {
     console.error('Error listing files:', error);
-    res.status(500).json({ error: 'Failed to list files' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to list files' 
+    });
   }
 });
 
-// Download existing PDF
+// Download existing PDF (All authenticated users)
 router.get('/download/:filename', (req, res) => {
   try {
     const path = require('path');
@@ -87,14 +103,20 @@ router.get('/download/:filename', (req, res) => {
     const filepath = path.join(__dirname, '../uploads/question-papers', filename);
     
     if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ error: 'File not found' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'File not found' 
+      });
     }
     
     res.download(filepath);
     
   } catch (error) {
     console.error('Download error:', error);
-    res.status(500).json({ error: 'Failed to download file' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to download file' 
+    });
   }
 });
 

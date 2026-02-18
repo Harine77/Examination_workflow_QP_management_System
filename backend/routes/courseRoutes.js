@@ -2,19 +2,30 @@ const express = require('express');
 const router = express.Router();
 const Course = require('../models/Course');
 const CourseOutcome = require('../models/CourseOutcome');
+const { protect } = require('../middleware/authMiddleware');
 
-// Get all courses
+// All routes require authentication
+router.use(protect);
+
+// Get all courses (All authenticated users)
 router.get('/', async (req, res) => {
   try {
     const courses = await Course.findAll();
-    res.json(courses);
+    res.json({
+      success: true,
+      count: courses.length,
+      data: courses
+    });
   } catch (error) {
     console.error('Error fetching courses:', error);
-    res.status(500).json({ error: 'Failed to fetch courses' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch courses' 
+    });
   }
 });
 
-// Get single course by ID
+// Get single course by ID (All authenticated users)
 router.get('/:id', async (req, res) => {
   try {
     const course = await Course.findByPk(req.params.id, {
@@ -22,17 +33,26 @@ router.get('/:id', async (req, res) => {
     });
     
     if (!course) {
-      return res.status(404).json({ error: 'Course not found' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Course not found' 
+      });
     }
     
-    res.json(course);
+    res.json({
+      success: true,
+      data: course
+    });
   } catch (error) {
     console.error('Error fetching course:', error);
-    res.status(500).json({ error: 'Failed to fetch course' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch course' 
+    });
   }
 });
 
-// Create new course with outcomes
+// Create new course with outcomes (All authenticated users can create courses)
 router.post('/', async (req, res) => {
   try {
     const { courseCode, courseName, semester, syllabus, outcomes } = req.body;
@@ -64,24 +84,40 @@ router.post('/', async (req, res) => {
       include: [CourseOutcome]
     });
     
-    res.status(201).json(createdCourse);
+    res.status(201).json({
+      success: true,
+      message: 'Course created successfully',
+      data: createdCourse
+    });
     
   } catch (error) {
     console.error('Error creating course:', error);
-    res.status(500).json({ error: 'Failed to create course' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to create course',
+      message: error.message
+    });
   }
 });
 
-// Get course outcomes for a specific course
+// Get course outcomes for a specific course (All authenticated users)
 router.get('/:id/outcomes', async (req, res) => {
   try {
     const outcomes = await CourseOutcome.findAll({
       where: { CourseId: req.params.id }
     });
-    res.json(outcomes);
+    
+    res.json({
+      success: true,
+      count: outcomes.length,
+      data: outcomes
+    });
   } catch (error) {
     console.error('Error fetching outcomes:', error);
-    res.status(500).json({ error: 'Failed to fetch course outcomes' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch course outcomes' 
+    });
   }
 });
 
