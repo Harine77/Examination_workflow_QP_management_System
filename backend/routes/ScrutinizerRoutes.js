@@ -21,89 +21,59 @@ const QP_TABLE = 'question_papers';  // ← Change to 'QuestionPapers' or 'Quest
 async function classifyPaper(paperTitle) {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
-    // Count distinct question_nos for THIS paper specifically
+    // Total questions
     const { rows: [{ total }] } = await client.query(
-      `SELECT COUNT(DISTINCT question_no)::int AS total 
-       FROM ${QP_TABLE} 
-       WHERE paper_title = $1`,
+      `SELECT COUNT(DISTINCT question_no)::int AS total FROM ${QP_TABLE} WHERE paper_title = $1`,
       [paperTitle]
     );
 
-    if (total === 0) {
-      await client.query('ROLLBACK');
-      return { status: 'PENDING', progress: { total: 0, approved: 0, suggested: 0, reviewed: 0 } };
-    }
-
-    // Get review counts, making sure we only count reviews for question_nos that exist in the paper
-    const { rows: [counts] } = await client.query(
+    // Reviews
+    const { rows: [{ approved, suggested }] } = await client.query(
       `SELECT 
-         COALESCE(SUM(CASE WHEN qr.status = 'APPROVED' THEN 1 ELSE 0 END), 0)::int AS approved,
-         COALESCE(SUM(CASE WHEN qr.status = 'SUGGESTED' THEN 1 ELSE 0 END), 0)::int AS suggested
-       FROM (SELECT DISTINCT question_no FROM ${QP_TABLE} WHERE paper_title = $1) qp
-       LEFT JOIN question_reviews qr 
-         ON qr.question_no = qp.question_no AND qr.paper_title = $1`,
+         COALESCE(COUNT(*) FILTER (WHERE status = 'APPROVED'), 0)::int AS approved,
+         COALESCE(COUNT(*) FILTER (WHERE status = 'SUGGESTED'), 0)::int AS suggested
+       FROM question_reviews WHERE paper_title = $1`,
       [paperTitle]
     );
 
-    const { approved, suggested } = counts;
     const reviewed = approved + suggested;
 
-    console.log(`[classifyPaper] "${paperTitle}" → total=${total}, approved=${approved}, suggested=${suggested}, reviewed=${reviewed}`);
-
-    if (approved === total) {
-      // ALL questions approved
-      const insertResult = await client.query(
-        `INSERT INTO approved_papers (paper_title, approved_at)
-         VALUES ($1, NOW()) 
-         ON CONFLICT (paper_title) DO UPDATE SET approved_at = NOW()
-         RETURNING *`,
+    if (total > 0 && reviewed === total && approved === total) {
+      // All approved
+      await client.query(
+        `INSERT INTO approved_papers (paper_title)
+         VALUES ($1) ON CONFLICT (paper_title) DO UPDATE SET approved_at = NOW()`,
         [paperTitle]
       );
-      console.log(`[classifyPaper] Inserted into approved_papers:`, insertResult.rows[0]);
-
       await client.query(`DELETE FROM unapproved_papers WHERE paper_title = $1`, [paperTitle]);
-      await client.query('COMMIT');
       return { status: 'APPROVED', progress: { total, approved, suggested, reviewed } };
 
     } else if (suggested > 0) {
-      // Has suggestions → needs revision
+      // Has suggestions
       const { rows: suggestions } = await client.query(
         `SELECT question_no, suggestion_text FROM question_reviews
          WHERE paper_title = $1 AND status = 'SUGGESTED'`,
         [paperTitle]
       );
-      const reason = suggestions
-        .map(r => `Q${r.question_no}: ${r.suggestion_text || 'revision needed'}`)
-        .join(' | ');
+      const reason = suggestions.map(r => `Q${r.question_no}: ${r.suggestion_text || 'revision needed'}`).join(' | ');
 
       await client.query(
-        `INSERT INTO unapproved_papers (paper_title, reason, updated_at)
-         VALUES ($1, $2, NOW()) 
-         ON CONFLICT (paper_title) DO UPDATE SET reason = $2, updated_at = NOW()`,
+        `INSERT INTO unapproved_papers (paper_title, reason)
+         VALUES ($1, $2) ON CONFLICT (paper_title) DO UPDATE SET reason = $2, updated_at = NOW()`,
         [paperTitle, reason]
       );
       await client.query(`DELETE FROM approved_papers WHERE paper_title = $1`, [paperTitle]);
-      await client.query('COMMIT');
       return { status: 'NEEDS_REVISION', progress: { total, approved, suggested, reviewed } };
 
     } else if (reviewed > 0) {
       // Partially reviewed
       await client.query(`DELETE FROM approved_papers WHERE paper_title = $1`, [paperTitle]);
       await client.query(`DELETE FROM unapproved_papers WHERE paper_title = $1`, [paperTitle]);
-      await client.query('COMMIT');
       return { status: 'IN_PROGRESS', progress: { total, approved, suggested, reviewed } };
 
     } else {
-      await client.query('COMMIT');
       return { status: 'PENDING', progress: { total, approved: 0, suggested: 0, reviewed: 0 } };
     }
-
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(`[classifyPaper] ERROR for "${paperTitle}":`, err.message);
-    throw err;
   } finally {
     client.release();
   }
@@ -259,6 +229,208 @@ router.get('/status', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── GET /api/scrutinizer/approved-papers/random-three ───────────────────────
+router.get('/approved-papers/random-three', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    // Get 3 random approved papers
+    const { rows: approvedList } = await client.query(
+      `SELECT paper_title FROM approved_papers ORDER BY RANDOM() LIMIT 3`
+    );
+
+    if (approvedList.length < 3) {
+      return res.json({
+        success: false,
+        error: `Only ${approvedList.length} approved paper(s) found. Need at least 3 for shuffling.`,
+        papers: []
+      });
+    }
+
+    // Fetch full questions for each approved paper
+    const papers = await Promise.all(
+      approvedList.map(async ({ paper_title }) => {
+        const { rows } = await client.query(
+          `SELECT * FROM ${QP_TABLE}
+           WHERE paper_title = $1
+           ORDER BY section,
+                    CAST(regexp_replace(question_no, '[^0-9]', '', 'g') AS INTEGER),
+                    question_no`,
+          [paper_title]
+        );
+
+        // Group by section
+        const sections = { '2M': [], '6M': [], '12M': [] };
+        rows.forEach(q => {
+          if (sections[q.section]) {
+            sections[q.section].push({
+              id: q.id,
+              paper_title: q.paper_title,
+              section: q.section,
+              question_no: q.question_no,
+              marks: q.marks,
+              question: q.question
+            });
+          }
+        });
+
+        return { paper_title, sections };
+      })
+    );
+
+    res.json({ success: true, papers });
+  } catch (err) {
+    console.error('GET /scrutinizer/approved-papers/random-three:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── GET /api/scrutinizer/approved-papers/random-three ────────────────────────
+// Returns 3 random approved papers with full question details for final paper generation
+router.get('/approved-papers/random-three', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    // Get 3 random approved papers
+    const { rows: approvedTitles } = await client.query(
+      `SELECT paper_title FROM approved_papers ORDER BY RANDOM() LIMIT 3`
+    );
+
+    if (approvedTitles.length < 3) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Only ${approvedTitles.length} approved papers found. Need at least 3.` 
+      });
+    }
+
+    // Fetch full question details for each paper
+    const papers = [];
+    for (const { paper_title } of approvedTitles) {
+      const { rows } = await client.query(
+        `SELECT * FROM ${QP_TABLE}
+         WHERE paper_title = $1
+         ORDER BY section,
+                  CAST(regexp_replace(question_no, '[^0-9]', '', 'g') AS INTEGER),
+                  question_no`,
+        [paper_title]
+      );
+
+      // Group by section
+      const sections = { '2M': [], '6M': [], '12M': [] };
+      for (const row of rows) {
+        if (sections[row.section]) {
+          sections[row.section].push({
+            id: row.id,
+            paper_title: row.paper_title,
+            section: row.section,
+            question_no: row.question_no,
+            marks: row.marks,
+            question: row.question,
+          });
+        }
+      }
+
+      papers.push({ paper_title, sections });
+    }
+
+    res.json({ success: true, papers });
+  } catch (err) {
+    console.error('GET /scrutinizer/approved-papers/random-three:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /api/scrutinizer/save-final-paper ──────────────────────────────────
+router.post('/save-final-paper', async (req, res) => {
+  const { final_paper_title, questions, source_papers } = req.body;
+
+  if (!final_paper_title || !questions || !Array.isArray(questions)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Missing required fields: final_paper_title, questions (array)' 
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Create final_paper table if doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS final_paper (
+        id SERIAL PRIMARY KEY,
+        final_paper_title VARCHAR(255) NOT NULL,
+        section VARCHAR(10) NOT NULL,
+        question_no VARCHAR(10) NOT NULL,
+        marks INTEGER NOT NULL,
+        question TEXT NOT NULL,
+        source_paper_title VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(final_paper_title, question_no)
+      )
+    `);
+
+    // Delete existing (if regenerating)
+    await client.query(
+      `DELETE FROM final_paper WHERE final_paper_title = $1`,
+      [final_paper_title]
+    );
+
+    // Insert all questions
+    for (const q of questions) {
+      await client.query(
+        `INSERT INTO final_paper 
+         (final_paper_title, section, question_no, marks, question, source_paper_title)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          final_paper_title,
+          q.section,
+          q.question_no,
+          q.marks,
+          q.question,
+          q.source_paper_title || q.paper_title
+        ]
+      );
+    }
+
+    // Store metadata
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS final_paper_metadata (
+        id SERIAL PRIMARY KEY,
+        final_paper_title VARCHAR(255) NOT NULL UNIQUE,
+        source_papers TEXT[] NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(
+      `INSERT INTO final_paper_metadata (final_paper_title, source_papers)
+       VALUES ($1, $2)
+       ON CONFLICT (final_paper_title) 
+       DO UPDATE SET source_papers = $2, created_at = NOW()`,
+      [final_paper_title, source_papers || []]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({ 
+      success: true, 
+      message: `Final paper saved with ${questions.length} questions`,
+      final_paper_title,
+      questions_count: questions.length
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /scrutinizer/save-final-paper:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
   }
 });
 
