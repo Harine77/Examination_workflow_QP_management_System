@@ -30,6 +30,7 @@ function QuestionPaperCreator() {
   const [questions, setQuestions] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [courseId, setCourseId] = useState(null);
+  const [paperId, setPaperId] = useState(null);
 
   // Initialize questions based on exam format
   const initializeQuestions = (format) => {
@@ -111,7 +112,7 @@ function QuestionPaperCreator() {
     }
 
     try {
-      // CHANGED: Use api service instead of axios directly
+      // Create course first
       const response = await api.post('/courses', {
         courseCode: courseInfo.courseCode,
         courseName: courseInfo.courseName,
@@ -124,11 +125,23 @@ function QuestionPaperCreator() {
         }))
       });
 
-      setCourseId(response.data.data.id);  // CHANGED: Updated response structure
-      toast.success('✅ Course information saved!');
+      const newCourseId = response.data.data.id;
+      setCourseId(newCourseId);
+
+      // Create question paper so it appears in faculty's Question Papers list
+      const paperPayload = {
+        courseId: newCourseId,
+        examType: examFormat,
+        catNumber: courseInfo.catNumber || null,
+        examDate: courseInfo.examDate || null
+      };
+      const paperResponse = await api.post('/questions/paper', paperPayload);
+      setPaperId(paperResponse.data.data.id);
+
+      toast.success('✅ Course information saved! Question paper created.');
       setStep(3);
     } catch (error) {
-      toast.error('Failed to save course information');
+      toast.error(error.response?.data?.error || 'Failed to save course information');
       console.error(error);
     }
   };

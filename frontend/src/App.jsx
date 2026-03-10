@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider } from './context/authContext';
 import PrivateRoute from './components/PrivateRoute';
 
 // Pages
@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import QuestionPapers from './pages/QuestionPapers';
+import PaperDetails from './pages/PaperDetails';
 import CreatePaper from './pages/CreatePaper';
 
 function App() {
@@ -37,6 +38,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <QuestionPapers />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/papers/:paperId"
+              element={
+                <PrivateRoute>
+                  <PaperDetails />
                 </PrivateRoute>
               }
             />
