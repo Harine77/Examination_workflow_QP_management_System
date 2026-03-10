@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -14,6 +13,7 @@ import QuestionPapers from './pages/QuestionPapers';
 import CreatePaper from './pages/CreatePaper';
 import ScrutinizerMainDashboard from './pages/ScrutinizerMainDashboard';
 import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
+import ScrutinizerFinalPaper from './pages/ScrutinizerFinalPaper';
 import HODDashboard from './pages/HODDashboard';
 import PanelDashboard from './pages/PanelDashboard';
 
@@ -108,6 +108,14 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['scrutinizer']}>
                   <ScrutinizerDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/scrutinizer-final-paper"
+              element={
+                <PrivateRoute allowedRoles={['scrutinizer']}>
+                  <ScrutinizerFinalPaper />
                 </PrivateRoute>
               }
             />
