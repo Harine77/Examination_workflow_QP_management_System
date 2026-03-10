@@ -21,9 +21,27 @@ const Login = () => {
 
     setLoading(true);
     try {
-      await login(email, password);
+      const response = await login(email, password);
+      const userRole = response.data.data?.role;
+      
       toast.success('Login successful!');
-      navigate('/dashboard');
+      
+      // Navigate based on role
+      switch(userRole) {
+        case 'scrutinizer':
+          navigate('/scrutinizer');
+          break;
+        case 'hod':
+          navigate('/hod-dashboard');
+          break;
+        case 'panel':
+        case 'panel_member':
+          navigate('/panel-dashboard');
+          break;
+        case 'faculty':
+        default:
+          navigate('/dashboard');
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Login failed');
     } finally {

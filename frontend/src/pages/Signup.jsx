@@ -44,9 +44,26 @@ const Signup = () => {
 
     setLoading(true);
     try {
-      await signup(formData.username, formData.email, formData.password, formData.role);
+      const response = await signup(formData.username, formData.email, formData.password, formData.role);
       toast.success('Account created successfully!');
-      navigate('/dashboard');
+      
+      // Navigate based on role
+      const userRole = response.data.data?.role;
+      switch(userRole) {
+        case 'scrutinizer':
+          navigate('/scrutinizer');
+          break;
+        case 'hod':
+          navigate('/hod-dashboard');
+          break;
+        case 'panel':
+        case 'panel_member':
+          navigate('/panel-dashboard');
+          break;
+        case 'faculty':
+        default:
+          navigate('/dashboard');
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Signup failed');
     } finally {

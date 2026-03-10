@@ -16,6 +16,7 @@ const Navbar = () => {
         return 'bg-blue-600';
       case 'scrutinizer':
         return 'bg-green-600';
+      case 'panel':
       case 'panel_member':
         return 'bg-yellow-600';
       case 'hod':
