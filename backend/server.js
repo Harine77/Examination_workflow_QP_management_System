@@ -8,8 +8,7 @@ const CourseOutcome = require('./models/CourseOutcome');
 const BloomKeyword = require('./models/BloomKeyword');
 const QuestionPaper = require('./models/QuestionPaper');
 const Question = require('./models/Question');
-const User = require('./models/user'); // NEW
-
+const User = require('./models/user');
 
 // Define User-QuestionPaper relationships
 User.hasMany(QuestionPaper, { foreignKey: 'createdBy', as: 'createdPapers' });
@@ -20,10 +19,12 @@ QuestionPaper.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 QuestionPaper.belongsTo(User, { foreignKey: 'reviewedBy', as: 'reviewer' });
 QuestionPaper.belongsTo(User, { foreignKey: 'finalizedBy', as: 'finalizer' });
 
-const courseRoutes = require('./routes/courseRoutes');
-const questionRoutes = require('./routes/questionRoutes');
-const pdfRoutes = require('./routes/pdfRoutes');
-const authRoutes = require('./routes/authRoutes'); // NEW
+// Routes imports
+const courseRoutes      = require('./routes/courseRoutes');
+const questionRoutes    = require('./routes/questionRoutes');
+const pdfRoutes         = require('./routes/pdfRoutes');
+const authRoutes        = require('./routes/authRoutes');
+const scrutinizerRoutes = require('./routes/ScrutinizerRoutes.js'); // ← ADDED
 
 const app = express();
 
@@ -33,15 +34,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api/courses', courseRoutes);
-app.use('/api/questions', questionRoutes);
-app.use('/api/pdf', pdfRoutes);
-app.use('/api/auth', authRoutes); // NEW
+app.use('/api/courses',     courseRoutes);
+app.use('/api/questions',   questionRoutes);
+app.use('/api/pdf',         pdfRoutes);
+app.use('/api/auth',        authRoutes);
+app.use('/api/scrutinizer', scrutinizerRoutes); // ← ADDED
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     message: 'CO/KL Mapper API is running',
     timestamp: new Date().toISOString()
   });
@@ -52,23 +54,19 @@ const PORT = process.env.PORT || 5000;
 // Start server and seed data
 const startServer = async () => {
   try {
-    // Connect to database
     await sequelize.authenticate();
-    console.log('✅ Database connected');
-    
-    // Sync models (create tables)
+    console.log('✅ Database connected'); 
+
     await sequelize.sync({ force: false });
     console.log('✅ Database models synced');
-    
-    // Seed sample data
+
     await seedSampleData();
-    
-    // Start listening
+
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
     });
-    
+
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
@@ -79,23 +77,21 @@ const startServer = async () => {
 async function seedSampleData() {
   try {
     const courseCount = await Course.count();
-    
+
     if (courseCount > 0) {
       console.log('✅ Sample data already exists');
       return;
     }
-    
+
     console.log('📝 Seeding sample data...');
-    
-    // Create AI course
+
     const aiCourse = await Course.create({
       courseCode: 'UIT2504',
       courseName: 'Artificial Intelligence',
       semester: 5,
       syllabus: 'Introduction to AI, Intelligent Agents, Search Algorithms, Game Playing, Logic'
     });
-    
-    // Create Course Outcomes
+
     await CourseOutcome.bulkCreate([
       {
         CourseId: aiCourse.id,
@@ -116,8 +112,7 @@ async function seedSampleData() {
         keywords: ['logical agents', 'propositional logic', 'first order logic', 'knowledge representation', 'inference', 'resolution', 'forward chaining', 'backward chaining', 'bayesian networks', 'probabilistic reasoning']
       }
     ]);
-    
-    // Create Bloom taxonomy keywords
+
     await BloomKeyword.bulkCreate([
       {
         level: 'K1',
@@ -150,12 +145,18 @@ async function seedSampleData() {
         keywords: ['design', 'develop', 'construct', 'formulate', 'create', 'devise']
       }
     ]);
-    
+
     console.log('✅ Sample data seeded successfully');
-    
+
   } catch (error) {
     console.error('❌ Error seeding data:', error);
   }
 }
 
 startServer();
+
+
+
+
+
+
