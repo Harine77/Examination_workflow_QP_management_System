@@ -12,6 +12,8 @@ backend/.env
 
 # Node modules
 node_modules/
+backend/node_modules/
+frontend/node_modules/
 
 # Build folders
 dist/
@@ -24,3 +26,6 @@ yarn-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Uploads
+uploads/

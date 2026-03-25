@@ -27,11 +27,13 @@ const User = sequelize.define('User', {
     }
   },
   role: {
-  type: DataTypes.STRING,
-  allowNull: false,
-  defaultValue: 'faculty',
-  validate: {
-    isIn: [['faculty', 'scrutinizer', 'panel_member', 'hod']]
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'faculty',
+    validate: {
+      // scrutinizer_1 and scrutinizer_2 are the new distinct roles.
+      // Plain 'scrutinizer' is kept for backward compatibility.
+      isIn: [['faculty', 'scrutinizer', 'scrutinizer_1', 'scrutinizer_2', 'panel_member', 'hod']]
     }
   },
   isActive: {

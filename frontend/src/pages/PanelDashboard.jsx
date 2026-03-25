@@ -47,12 +47,12 @@ const PanelDashboard = () => {
           </button>
 
           <button
-            onClick={() => navigate('/papers?status=finalized')}
+            onClick={() => navigate('/papers?status=with_panel')}
             className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left"
           >
             <div className="text-5xl mb-4">✅</div>
-            <h3 className="text-2xl font-bold mb-2">Finalized Papers</h3>
-            <p className="text-sm opacity-90">View approved and finalized question papers</p>
+            <h3 className="text-2xl font-bold mb-2">Papers Awaiting Panel Review</h3>
+            <p className="text-sm opacity-90">Open randomized final papers and forward them to HOD</p>
           </button>
         </div>
 

@@ -34,27 +34,53 @@ const Dashboard = () => {
           ]
         };
       case 'scrutinizer':
+      case 'scrutinizer_1':
         return {
-          title: 'Scrutinizer Dashboard',
-          description: 'Review and approve question papers',
+          title: 'Scrutinizer 1 Dashboard',
+          description: 'Review submitted papers and pass them to Scrutinizer 2',
           color: 'green',
           icon: '🔍',
           actions: [
             {
               title: 'Papers to Review',
-              description: 'View submitted papers waiting for review',
+              description: 'View papers submitted by faculty waiting for your review',
               icon: '📑',
-              action: () => navigate('/scrutinizer'),       // ← fixed
+              action: () => navigate('/scrutinizer-review'),
               bgColor: 'bg-green-500',
               hoverColor: 'hover:bg-green-600'
             },
             {
-              title: 'All Question Papers',
-              description: 'Browse all question papers in the system',
+              title: 'Review Dashboard',
+              description: 'Open the full paper review and comparison interface',
               icon: '📚',
-              action: () => navigate('/scrutinizer'),       // ← fixed
+              action: () => navigate('/scrutinizer'),
               bgColor: 'bg-teal-500',
               hoverColor: 'hover:bg-teal-600'
+            }
+          ]
+        };
+      case 'scrutinizer_2':
+        return {
+          title: 'Scrutinizer 2 Dashboard',
+          description: 'Approve or send back papers reviewed by Scrutinizer 1',
+          color: 'green',
+          icon: '✅',
+          actions: [
+            {
+              title: 'Papers Awaiting Approval',
+              description: 'View papers passed by Scrutinizer 1',
+              icon: '📑',
+              action: () => navigate('/scrutinizer-review'),
+              bgColor: 'bg-emerald-500',
+              hoverColor: 'hover:bg-emerald-600'
+            },
+            {
+              title: 'Review Dashboard',
+              description: 'Open the full paper review interface',
+              icon: '📚',
+              action: () => navigate('/scrutinizer'),
+              bgColor: 'bg-green-600',
+              hoverColor: 'hover:bg-green-700'
             }
           ]
         };
