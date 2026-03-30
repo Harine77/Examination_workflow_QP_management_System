@@ -104,7 +104,7 @@ function KlBadge({ level }) {
 }
 
 function CoBadge({ question }) {
-  const label = question.CourseOutcome?.coNumber || (question.CourseOutcomeId ? `CO${question.CourseOutcomeId}` : null);
+  const label = question.CourseOutcome?.coNumber || null;
   if (!label) return <span style={{ color: '#9CA3AF' }}>—</span>;
   return <span style={{ background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 5, fontSize: '0.72rem', fontWeight: 700 }}>{label}</span>;
 }
@@ -230,13 +230,27 @@ export default function PaperView() {
   const [comment, setComment] = useState('');
   const [acting,  setActing]  = useState(false);
 
+  // S2 CO/KL verification state
+  const [verifying,   setVerifying]   = useState(false);
+  const [verifyData,  setVerifyData]  = useState(null);
+  const [verifyError, setVerifyError] = useState(null);
+
+  // S2 shuffle state
+  const [shuffleGroups,  setShuffleGroups]  = useState([]);
+  const [shuffling,      setShuffling]      = useState(false);
+
   useEffect(() => { fetchPaper(); }, [id]);
 
   const fetchPaper = async () => {
     setLoading(true);
     try {
       const res = await api.get(`/questions/papers/${id}`);
-      setPaper(res.data.data);
+      const p = res.data.data;
+      setPaper(p);
+      // If S2 is viewing this paper, pre-load shuffle group info
+      if (p.status === 'with_scrutinizer2' && p.CourseId) {
+        fetchShuffleGroups(p.CourseId);
+      }
     } catch {
       toast.error('Paper not found or access denied');
       navigate(-1);
@@ -256,6 +270,45 @@ export default function PaperView() {
       toast.error(err.response?.data?.error || 'Action failed');
     } finally {
       setActing(false);
+    }
+  };
+
+  const runVerification = async () => {
+    setVerifying(true);
+    setVerifyError(null);
+    setVerifyData(null);
+    try {
+      const res = await api.get(`/scrutinizer/papers/${id}/verify-mapping`);
+      setVerifyData(res.data);
+    } catch (err) {
+      setVerifyError(err.response?.data?.error || 'Verification failed');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const fetchShuffleGroups = async (courseId) => {
+    try {
+      const res = await api.get('/scrutinizer/approved-papers');
+      const groups = res.data.groups || [];
+      // Only show the group for this paper's course
+      setShuffleGroups(groups.filter(g => g.courseId === courseId));
+    } catch (_) {}
+  };
+
+  const runShuffle = async (courseId) => {
+    if (!window.confirm(
+      `This will randomly pick one question per slot from all ${shuffleGroups.find(g=>g.courseId===courseId)?.count || ''} papers for this course and create a single shuffled paper sent directly to the Panel.\n\nProceed?`
+    )) return;
+    setShuffling(true);
+    try {
+      const res = await api.post(`/scrutinizer/randomize/${courseId}`);
+      toast.success(`✅ ${res.data.message}`);
+      await fetchPaper();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Shuffle failed');
+    } finally {
+      setShuffling(false);
     }
   };
 
@@ -435,8 +488,160 @@ export default function PaperView() {
         {showActions && (
           <div style={{ background: '#fff', borderRadius: 14, padding: '1.75rem 2rem', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', border: '1px solid #E5E7EB' }}>
             <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
-              {isFaculty ? '📤 Submit Paper' : isS1 ? '🔍 Scrutinizer 1 — Review Actions' : isS2 ? '✅ Scrutinizer 2 — Review Actions' : isPanel ? '📨 Panel Actions' : '🏛️ HOD Actions'}
+              {isFaculty ? '📤 Submit Paper' : isS1 ? '🔍 Scrutinizer 1 — Review Actions' : isS2 ? '✅ Scrutinizer 2 — CO/KL Verification & Actions' : isPanel ? '📨 Panel Actions' : '🏛️ HOD Actions'}
             </h3>
+
+            {/* ── S2: CO/KL Verification Panel ── */}
+            {isS2 && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                  <ActionBtn disabled={verifying} onClick={runVerification} variant="warning">
+                    {verifying ? '🔄 Analysing…' : '🔬 Run CO/KL Verification'}
+                  </ActionBtn>
+                  {verifyData && (
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <span style={{ background: '#DCFCE7', color: '#166534', padding: '4px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700 }}>
+                        ✓ {verifyData.summary.validQ}/{verifyData.summary.totalQ} Valid
+                      </span>
+                      {verifyData.summary.klMismatches > 0 && (
+                        <span style={{ background: '#FEF3C7', color: '#92400E', padding: '4px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700 }}>
+                          ⚠ {verifyData.summary.klMismatches} KL mismatch{verifyData.summary.klMismatches > 1 ? 'es' : ''}
+                        </span>
+                      )}
+                      {verifyData.summary.coMismatches > 0 && (
+                        <span style={{ background: '#FEE2E2', color: '#991B1B', padding: '4px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700 }}>
+                          ✗ {verifyData.summary.coMismatches} CO mismatch{verifyData.summary.coMismatches > 1 ? 'es' : ''}
+                        </span>
+                      )}
+                      {verifyData.summary.allValid && (
+                        <span style={{ background: '#DCFCE7', color: '#166534', padding: '4px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700 }}>
+                          🎉 All mappings correct!
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {verifyError && (
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 9, padding: '0.75rem 1rem', color: '#DC2626', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                    ⚠ {verifyError}
+                  </div>
+                )}
+
+                {verifyData && (
+                  <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, overflow: 'hidden', marginBottom: '0.5rem' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                      <thead>
+                        <tr style={{ background: '#F1F5F9' }}>
+                          {['Q.No', 'Question', 'Assigned KL', 'Suggested KL', 'KL', 'Assigned CO', 'Suggested CO', 'CO'].map(h => (
+                            <th key={h} style={{ padding: '0.6rem 0.75rem', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: '#374151', borderBottom: '2px solid #E5E7EB', whiteSpace: 'nowrap', textAlign: 'center' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {verifyData.questions.map((q, i) => (
+                          <tr key={q.id} style={{ background: !q.isValid ? '#FFF7ED' : i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', fontWeight: 700, color: '#374151', borderBottom: '1px solid #F3F4F6' }}>
+                              {q.part}{q.questionNumber}
+                            </td>
+                            <td style={{ padding: '0.6rem 0.75rem', maxWidth: 260, lineHeight: 1.5, color: '#1F2937', borderBottom: '1px solid #F3F4F6' }}>
+                              <div style={{ overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                {q.questionText}
+                              </div>
+                            </td>
+                            {/* Assigned KL */}
+                            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid #F3F4F6' }}>
+                              <span style={{ background: '#DBEAFE', color: '#1D4ED8', padding: '2px 8px', borderRadius: 5, fontWeight: 700, fontSize: '0.75rem' }}>
+                                {q.assigned.kl || '—'}
+                              </span>
+                            </td>
+                            {/* Suggested KL */}
+                            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid #F3F4F6' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                <span style={{ background: '#E0E7FF', color: '#3730A3', padding: '2px 8px', borderRadius: 5, fontWeight: 700, fontSize: '0.75rem' }}>
+                                  {q.suggested.kl || '—'}
+                                </span>
+                                {q.suggested.klVerb && (
+                                  <span style={{ fontSize: '0.65rem', color: '#6B7280', fontStyle: 'italic' }}>"{q.suggested.klVerb}"</span>
+                                )}
+                              </div>
+                            </td>
+                            {/* KL match */}
+                            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid #F3F4F6' }}>
+                              {q.klMatch === true  && <span style={{ color: '#059669', fontWeight: 800, fontSize: '1rem' }}>✓</span>}
+                              {q.klMatch === false && <span style={{ color: '#DC2626', fontWeight: 800, fontSize: '1rem' }}>✗</span>}
+                              {q.klMatch === null  && <span style={{ color: '#9CA3AF' }}>—</span>}
+                            </td>
+                            {/* Assigned CO */}
+                            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid #F3F4F6' }}>
+                              <span style={{ background: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: 5, fontWeight: 700, fontSize: '0.75rem' }}>
+                                {q.assigned.co || '—'}
+                              </span>
+                            </td>
+                            {/* Suggested CO */}
+                            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid #F3F4F6' }}>
+                              <span style={{ background: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: 5, fontWeight: 700, fontSize: '0.75rem' }}>
+                                {q.suggested.co || '—'}
+                              </span>
+                            </td>
+                            {/* CO match */}
+                            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid #F3F4F6' }}>
+                              {q.coMatch === true  && <span style={{ color: '#059669', fontWeight: 800, fontSize: '1rem' }}>✓</span>}
+                              {q.coMatch === false && <span style={{ color: '#DC2626', fontWeight: 800, fontSize: '1rem' }}>✗</span>}
+                              {q.coMatch === null  && <span style={{ color: '#9CA3AF' }}>—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── S2: Shuffle Panel ── */}
+            {isS2 && (
+              <div style={{ marginBottom: '1.5rem', background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: 12, padding: '1.25rem 1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#166534', marginBottom: '0.25rem' }}>
+                      🎲 Randomized Shuffle
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#4B7C5A' }}>
+                      {shuffleGroups.length === 0
+                        ? 'Only 1 paper exists for this course — need at least 2 to shuffle.'
+                        : shuffleGroups.map(g => (
+                            <span key={g.courseId}>
+                              <strong>{g.courseCode}</strong> — {g.count} paper{g.count > 1 ? 's' : ''} ready
+                              {g.count < 2 && <span style={{ color: '#DC2626' }}> (need at least 2)</span>}
+                            </span>
+                          ))
+                      }
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '0.3rem' }}>
+                      Picks one question per slot randomly from all papers → creates one final QP → sends to Panel
+                    </div>
+                  </div>
+                  {shuffleGroups.map(g => (
+                    <button
+                      key={g.courseId}
+                      disabled={!g.readyForRandomization || shuffling}
+                      onClick={() => runShuffle(g.courseId)}
+                      style={{
+                        padding: '0.7rem 1.4rem', borderRadius: 9, fontWeight: 700, fontSize: '0.88rem',
+                        border: 'none', cursor: g.readyForRandomization && !shuffling ? 'pointer' : 'not-allowed',
+                        background: g.readyForRandomization ? '#16A34A' : '#D1D5DB',
+                        color: g.readyForRandomization ? '#fff' : '#9CA3AF',
+                        opacity: shuffling ? 0.6 : 1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {shuffling ? '🔄 Shuffling…' : `🎲 Shuffle & Send to Panel`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Comment textarea for scrutinizers */}
             {(isS1 || isS2) && (
@@ -498,10 +703,10 @@ export default function PaperView() {
                 <>
                   <ActionBtn
                     disabled={acting}
-                    onClick={() => doAction(`/scrutinizer/papers/${paper.id}/approve`, { comments: comment }, 'Paper approved by Scrutinizer 2!')}
+                    onClick={() => doAction(`/scrutinizer/papers/${paper.id}/approve`, { comments: comment }, 'Paper approved — sent to Panel!')}
                     variant="success"
                   >
-                    {acting ? 'Processing…' : '✅ Approve Paper'}
+                    {acting ? 'Processing…' : '✅ Approve & Send to Panel'}
                   </ActionBtn>
                   <ActionBtn
                     disabled={acting}

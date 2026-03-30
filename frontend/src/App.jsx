@@ -13,7 +13,7 @@ import QuestionPapers from './pages/QuestionPapers';
 import CreatePaper from './pages/CreatePaper';
 import ScrutinizerMainDashboard from './pages/ScrutinizerMainDashboard';
 import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
-import ScrutinizerFinalPaper from './pages/ScrutinizerFinalPaper';
+import ScrutinizerFinalPaper from './pages/Scrutinizerfinalpaper';
 import HODDashboard from './pages/HODDashboard';
 import PanelDashboard from './pages/PanelDashboard';
 import PaperView from './pages/PaperView';

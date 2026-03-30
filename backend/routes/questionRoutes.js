@@ -10,7 +10,7 @@ const { protect, canCreate, canEdit, canFinalize } = require('../middleware/auth
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'exam_workflow',
+  database: process.env.DB_NAME || 'exam',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || process.env.DB_PASS || 'password',
 });
@@ -179,6 +179,7 @@ router.get('/papers/:id', async (req, res) => {
   try {
     const User = require('../models/user');
     const Course = require('../models/Course');
+    const CourseOutcome = require('../models/CourseOutcome');
     
     const paper = await QuestionPaper.findByPk(req.params.id, {
       include: [
@@ -202,7 +203,8 @@ router.get('/papers/:id', async (req, res) => {
           attributes: ['id', 'username', 'email', 'role']
         },
         {
-          model: Question
+          model: Question,
+          include: [{ model: CourseOutcome, attributes: ['id', 'coNumber'] }]
         }
       ]
     });

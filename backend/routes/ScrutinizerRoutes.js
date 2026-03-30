@@ -1,232 +1,132 @@
-// routes/ScrutinizerRoutes.js
-// Uses Sequelize models so it reads papers created by faculty correctly.
-// Maintains the same API surface as before so the frontend keeps working.
-
 const express = require('express');
 const router = express.Router();
-const { Op } = require('sequelize');
 const { Pool } = require('pg');
 const { protect } = require('../middleware/authMiddleware');
 const QuestionPaper = require('../models/QuestionPaper');
 const Question = require('../models/Question');
 const Course = require('../models/Course');
 const User = require('../models/user');
+const { Op } = require('sequelize');
 
-// ── Auth: all scrutinizer routes require a valid JWT ─────────────────────────
+// All scrutinizer routes require authentication
 router.use(protect);
 
-// Thin pg pool ONLY for the question_reviews table (created by the migration script)
+// PostgreSQL connection (for question_reviews raw table)
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'exam_workflow',
+  database: process.env.DB_NAME || 'exam',
   user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || process.env.DB_PASS || 'password',
+  password: process.env.DB_PASSWORD || 'password',
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Roles that are allowed to access scrutinizer routes
-const SCRUTINIZER_ROLES = ['scrutinizer', 'scrutinizer_1', 'scrutinizer_2'];
-
-function requireScrutinizer(req, res, next) {
-  if (!SCRUTINIZER_ROLES.includes(req.user.role)) {
-    return res.status(403).json({ success: false, error: 'Scrutinizers only' });
-  }
-  next();
-}
-
-// ─── Helper: classify paper ───────────────────────────────────────────────────
-async function classifyPaper(paperTitle) {
-  const client = await pool.connect();
-  try {
-    // Total questions
-    const { rows: [{ total }] } = await client.query(
-      `SELECT COUNT(DISTINCT question_no)::int AS total FROM ${QP_TABLE} WHERE paper_title = $1`,
-      [paperTitle]
-    );
-
-    // Reviews
-    const { rows: [{ approved, suggested }] } = await client.query(
-      `SELECT 
-         COALESCE(COUNT(*) FILTER (WHERE status = 'APPROVED'), 0)::int AS approved,
-         COALESCE(COUNT(*) FILTER (WHERE status = 'SUGGESTED'), 0)::int AS suggested
-       FROM question_reviews WHERE paper_title = $1`,
-      [paperTitle]
-    );
-
-    const reviewed = approved + suggested;
-
-    if (total > 0 && reviewed === total && approved === total) {
-      // All approved
-      await client.query(
-        `INSERT INTO approved_papers (paper_title)
-         VALUES ($1) ON CONFLICT (paper_title) DO UPDATE SET approved_at = NOW()`,
-        [paperTitle]
-      );
-      await client.query(`DELETE FROM unapproved_papers WHERE paper_title = $1`, [paperTitle]);
-      return { status: 'APPROVED', progress: { total, approved, suggested, reviewed } };
-
-    } else if (suggested > 0) {
-      // Has suggestions
-      const { rows: suggestions } = await client.query(
-        `SELECT question_no, suggestion_text FROM question_reviews
-         WHERE paper_title = $1 AND status = 'SUGGESTED'`,
-        [paperTitle]
-      );
-      const reason = suggestions.map(r => `Q${r.question_no}: ${r.suggestion_text || 'revision needed'}`).join(' | ');
-
-      await client.query(
-        `INSERT INTO unapproved_papers (paper_title, reason)
-         VALUES ($1, $2) ON CONFLICT (paper_title) DO UPDATE SET reason = $2, updated_at = NOW()`,
-        [paperTitle, reason]
-      );
-      await client.query(`DELETE FROM approved_papers WHERE paper_title = $1`, [paperTitle]);
-      return { status: 'NEEDS_REVISION', progress: { total, approved, suggested, reviewed } };
-
-    } else if (reviewed > 0) {
-      // Partially reviewed
-      await client.query(`DELETE FROM approved_papers WHERE paper_title = $1`, [paperTitle]);
-      await client.query(`DELETE FROM unapproved_papers WHERE paper_title = $1`, [paperTitle]);
-      return { status: 'IN_PROGRESS', progress: { total, approved, suggested, reviewed } };
-
-    } else {
-      return { status: 'PENDING', progress: { total, approved: 0, suggested: 0, reviewed: 0 } };
+// ─────────────────────────────────────────────
+// Helper: build sections from Questions array
+// ─────────────────────────────────────────────
+function buildSections(questions) {
+  const sections = { '2M': [], '6M': [], '12M': [] };
+  for (const q of questions) {
+    let sec;
+    if (q.marks === 2 || q.part === 'A') sec = '2M';
+    else if (q.marks === 6 || q.part === 'B') sec = '6M';
+    else sec = '12M';
+    if (sections[sec]) {
+      sections[sec].push({
+        id: q.id,
+        paper_title: null, // filled below
+        section: sec,
+        question_no: q.questionNumber,
+        marks: q.marks,
+        question: q.questionText,
+        review_status: null,
+        review_suggestion: null,
+      });
     }
-  } finally {
-    client.release();
   }
+  return sections;
 }
 
-// Which workflow stages each role should see for the GET /papers list
-function getVisibleStages(role) {
-  if (role === 'scrutinizer_1') return ['with_scrutinizer1'];
-  if (role === 'scrutinizer_2') return ['with_scrutinizer2', 'scrutinizer2_approved', 'randomized'];
-  // Generic 'scrutinizer' sees both stages (backward compat)
-  return ['with_scrutinizer1', 'with_scrutinizer2', 'submitted', 'scrutinizer2_approved', 'randomized'];
-}
-
-// Compute a consistent section label from a Question row
-function getSection(q) {
-  if (q.part === 'A' || q.marks === 2) return '2M';
-  if (q.part === 'B' || q.marks === 6) return '6M';
-  return '12M';
-}
-
-// Compute a human-readable question number from part + questionNumber.
-// Part A -> 1,2,3,4   Part B -> 5,6,7   Part C -> 8a,8b,9a,9b
-function getQuestionNo(q) {
-  if (q.part === 'A') return String(q.questionNumber);
-  if (q.part === 'B') return String(q.questionNumber + 4);
-  if (q.part === 'C') {
-    const base = Math.floor((q.questionNumber - 1) / 2) + 8;
-    const sub  = (q.questionNumber % 2 === 1) ? 'a' : 'b';
-    return `${base}${sub}`;
-  }
-  // Fallback
-  return `${q.part}${q.questionNumber}`;
-}
-
-// Build a display title for a paper
-function buildDisplayTitle(paper) {
-  const code = paper.Course?.courseCode || '?';
-  const type = paper.examType || '';
-  const cat  = paper.catNumber ? ` ${paper.catNumber}` : '';
-  return `${code} ${type}${cat} #${paper.id}`;
-}
-
-// ── GET /api/scrutinizer/papers ───────────────────────────────────────────────
-// Returns papers visible to the logged-in scrutinizer, formatted for the
-// Scrutinizerdashboard.jsx frontend component.
-router.get('/papers', requireScrutinizer, async (req, res) => {
+// ─────────────────────────────────────────────
+// GET /api/scrutinizer/papers
+// Returns papers relevant to the caller's role
+// ─────────────────────────────────────────────
+router.get('/papers', async (req, res) => {
   try {
-    const stages = getVisibleStages(req.user.role);
+    let whereClause = {};
+    const role = req.user.role;
+
+    if (role === 'scrutinizer_1' || role === 'scrutinizer') {
+      whereClause.status = 'with_scrutinizer1';
+    } else if (role === 'scrutinizer_2') {
+      whereClause.status = { [Op.in]: ['with_scrutinizer2', 'scrutinizer2_approved'] };
+    } else {
+      whereClause.status = { [Op.in]: ['with_scrutinizer1', 'with_scrutinizer2', 'scrutinizer2_approved'] };
+    }
 
     const dbPapers = await QuestionPaper.findAll({
-      where: { status: { [Op.in]: stages } },
+      where: whereClause,
       include: [
         { model: Course, attributes: ['id', 'courseCode', 'courseName'] },
         { model: User, as: 'creator', attributes: ['id', 'username', 'email'] },
-        { model: Question }
+        { model: Question },
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
     });
 
-    const papers = await Promise.all(dbPapers.map(async (paper) => {
-      // Use paper.id as string — this is the identifier the frontend sends back
-      const paperTitle = String(paper.id);
-
-      // Sort questions: Part A < B < C, then by questionNumber
-      const allQs = (paper.Questions || []).sort((a, b) => {
-        const order = { A: 0, B: 1, C: 2 };
-        const diff  = (order[a.part] ?? 9) - (order[b.part] ?? 9);
-        return diff !== 0 ? diff : a.questionNumber - b.questionNumber;
-      });
-
-      // Fetch this scrutinizer's own reviews for this paper
-      let reviewRows = [];
+    // Fetch all question_reviews for these papers
+    let reviewRows = [];
+    if (dbPapers.length > 0) {
+      const paperIds = dbPapers.map(p => p.id);
       try {
-        const result = await pool.query(
-          `SELECT question_id, status, suggestion_text
-             FROM question_reviews
-            WHERE paper_id = $1 AND reviewer_role = $2`,
-          [paper.id, req.user.role]
+        const { rows } = await pool.query(
+          `SELECT paper_id, question_id, status, suggestion_text FROM question_reviews WHERE paper_id = ANY($1)`,
+          [paperIds]
         );
-        reviewRows = result.rows;
-      } catch (_) { /* question_reviews table may not exist yet */ }
+        reviewRows = rows;
+      } catch (_) { /* table may not exist yet */ }
+    }
 
-      const reviewMap = {};
-      for (const r of reviewRows) {
-        reviewMap[r.question_id] = r;
-      }
+    const papers = dbPapers.map(paper => {
+      const paperTitle = `${paper.Course?.courseCode || 'Paper'} ${paper.examType}${paper.catNumber ? '-' + paper.catNumber : ''}`;
+      const sections = buildSections(paper.Questions || []);
 
-      // Build sections expected by the frontend
-      const sections = { '2M': [], '6M': [], '12M': [] };
-      for (const q of allQs) {
-        const sec = getSection(q);
-        const qno = getQuestionNo(q);
-        const rev = reviewMap[q.id];
-        if (sections[sec]) {
-          sections[sec].push({
-            id:               q.id,
-            paper_title:      paperTitle,
-            section:          sec,
-            question_no:      qno,
-            marks:            q.marks,
-            question:         q.questionText,
-            review_status:    rev?.status         || null,
-            review_suggestion: rev?.suggestion_text || null,
-          });
+      // Attach paper_title and review status to each question
+      let approved = 0, suggested = 0, reviewed = 0;
+      for (const sec of Object.values(sections)) {
+        for (const q of sec) {
+          q.paper_title = paperTitle;
+          const rev = reviewRows.find(r => r.paper_id === paper.id && r.question_id === q.id);
+          if (rev) {
+            q.review_status = rev.status;
+            q.review_suggestion = rev.suggestion_text;
+            reviewed++;
+            if (rev.status === 'APPROVED') approved++;
+            else if (rev.status === 'SUGGESTED') suggested++;
+          }
         }
       }
 
-      // Progress counters
-      const allFlat   = Object.values(sections).flat();
-      const total     = allFlat.length;
-      const approved  = allFlat.filter(q => q.review_status === 'APPROVED').length;
-      const suggested = allFlat.filter(q => q.review_status === 'SUGGESTED').length;
-      const reviewed  = approved + suggested;
-
-      let status;
-      if (approved === total && total > 0) status = 'APPROVED';
-      else if (suggested > 0)              status = 'NEEDS_REVISION';
-      else if (reviewed > 0)               status = 'IN_PROGRESS';
-      else                                 status = 'PENDING';
+      const total = (paper.Questions || []).length;
+      let status = 'PENDING';
+      if (reviewed > 0 && approved === total) status = 'APPROVED';
+      else if (suggested > 0) status = 'NEEDS_REVISION';
+      else if (reviewed > 0) status = 'IN_PROGRESS';
 
       return {
-        paper_title:          paperTitle,
-        display_title:        buildDisplayTitle(paper),
-        paper_id:             paper.id,
-        workflow_status:      paper.status,
-        creator:              paper.creator?.username || 'Unknown',
+        paper_id: paper.id,
+        paper_title: paperTitle,
+        workflow_status: paper.status,
         status,
+        progress: { total, approved, suggested, reviewed },
         sections,
-        progress:             { total, approved, suggested, reviewed },
-        scrutinizer1Comments: paper.scrutinizer1Comments || null,
-        scrutinizer2Comments: paper.scrutinizer2Comments || null,
-        revisionCount:        paper.revisionCount || 0,
+        courseCode: paper.Course?.courseCode,
+        courseName: paper.Course?.courseName,
+        examType: paper.examType,
+        catNumber: paper.catNumber,
+        createdBy: paper.creator?.username,
+        createdAt: paper.createdAt,
       };
-    }));
+    });
 
     res.json({ success: true, papers });
   } catch (err) {
@@ -235,653 +135,522 @@ router.get('/papers', requireScrutinizer, async (req, res) => {
   }
 });
 
-// ── GET /api/scrutinizer/reviews ─────────────────────────────────────────────
-router.get('/reviews', requireScrutinizer, async (req, res) => {
+// ─────────────────────────────────────────────
+// GET /api/scrutinizer/reviews
+// Returns all question_reviews for the current user
+// ─────────────────────────────────────────────
+router.get('/reviews', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT qr.paper_id, qr.question_id, q.part, q."questionNumber",
-              qr.status, qr.suggestion_text, qr.reviewed_at
-         FROM question_reviews qr
-         JOIN "Questions" q ON q.id = qr.question_id
-        WHERE qr.reviewer_role = $1
-        ORDER BY qr.reviewed_at DESC`,
-      [req.user.role]
+      `SELECT qr.paper_id, qr.question_id, qr.status, qr.suggestion_text, qr.reviewed_at,
+              q."questionNumber" AS question_no,
+              qp."examType", qp."catNumber"
+       FROM question_reviews qr
+       JOIN "Questions" q ON q.id = qr.question_id
+       JOIN "QuestionPapers" qp ON qp.id = qr.paper_id
+       WHERE qr.reviewer_id = $1
+       ORDER BY qr.reviewed_at DESC`,
+      [req.user.id]
     );
-
-    // Convert to {paper_title, question_no} format the frontend expects
-    const reviews = rows.map(r => ({
-      paper_title:     String(r.paper_id),
-      question_no:     getQuestionNo(r),
-      status:          r.status,
-      suggestion_text: r.suggestion_text,
-      reviewed_at:     r.reviewed_at,
-    }));
-
-    res.json({ success: true, reviews });
+    res.json({ success: true, reviews: rows });
   } catch (err) {
-    // question_reviews table may not exist yet (before migration)
+    // table may not exist yet
     res.json({ success: true, reviews: [] });
   }
 });
 
-// ── POST /api/scrutinizer/review ─────────────────────────────────────────────
-// Body: { paper_title, question_no, status, suggestion_text }
-router.post('/review', requireScrutinizer, async (req, res) => {
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/review
+// Save a single question review decision
+// ─────────────────────────────────────────────
+router.post('/review', async (req, res) => {
   const { paper_title, question_no, status, suggestion_text } = req.body;
 
   if (!paper_title || !question_no || !status) {
-    return res.status(400).json({ success: false, error: 'Missing fields: paper_title, question_no, status required' });
-  }
-  if (!['APPROVED', 'SUGGESTED'].includes(status)) {
-    return res.status(400).json({ success: false, error: 'status must be APPROVED or SUGGESTED' });
-  }
-
-  const paperId = parseInt(paper_title, 10);
-  if (isNaN(paperId)) {
-    return res.status(400).json({ success: false, error: 'paper_title must be the numeric paper ID' });
+    return res.status(400).json({ success: false, error: 'paper_title, question_no, and status are required' });
   }
 
   try {
-    const paper = await QuestionPaper.findByPk(paperId, { include: [Question] });
-    if (!paper) {
-      return res.status(404).json({ success: false, error: 'Paper not found' });
-    }
-
-    const targetQ = (paper.Questions || []).find(q => getQuestionNo(q) === question_no);
-    if (!targetQ) {
-      return res.status(404).json({ success: false, error: `Question '${question_no}' not found in paper ${paperId}` });
-    }
-
-    await pool.query(
-      `INSERT INTO question_reviews
-         (paper_id, question_id, reviewer_id, reviewer_role, status, suggestion_text, reviewed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       ON CONFLICT (paper_id, question_id, reviewer_role)
-       DO UPDATE SET status = $5, suggestion_text = $6, reviewed_at = NOW()`,
-      [paperId, targetQ.id, req.user.id, req.user.role, status, suggestion_text || null]
+    // Find the question by number — look up paper by title pattern
+    const { rows: qRows } = await pool.query(
+      `SELECT q.id, q."QuestionPaperId" FROM "Questions" q
+       JOIN "QuestionPapers" qp ON qp.id = q."QuestionPaperId"
+       JOIN "Courses" c ON c.id = qp."CourseId"
+       WHERE q."questionNumber" = $1
+       LIMIT 1`,
+      [question_no]
     );
 
-    res.json({ success: true });
+    if (!qRows.length) {
+      return res.status(404).json({ success: false, error: 'Question not found' });
+    }
+
+    const { id: question_id, QuestionPaperId: paper_id } = qRows[0];
+    const reviewer_role = req.user.role;
+
+    await pool.query(
+      `INSERT INTO question_reviews (paper_id, question_id, reviewer_id, reviewer_role, status, suggestion_text)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (paper_id, question_id, reviewer_role)
+       DO UPDATE SET status = EXCLUDED.status, suggestion_text = EXCLUDED.suggestion_text, reviewed_at = NOW()`,
+      [paper_id, question_id, req.user.id, reviewer_role, status, suggestion_text || null]
+    );
+
+    res.json({ success: true, message: 'Review saved' });
   } catch (err) {
     console.error('POST /scrutinizer/review:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ── POST /api/scrutinizer/review/bulk ────────────────────────────────────────
-// Body: { paper_title, status }
-router.post('/review/bulk', requireScrutinizer, async (req, res) => {
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/review/bulk
+// Bulk approve all questions in a paper
+// ─────────────────────────────────────────────
+router.post('/review/bulk', async (req, res) => {
   const { paper_title, status } = req.body;
-
   if (!paper_title || !status) {
-    return res.status(400).json({ success: false, error: 'Missing fields: paper_title and status required' });
-  }
-  if (!['APPROVED', 'SUGGESTED'].includes(status)) {
-    return res.status(400).json({ success: false, error: 'status must be APPROVED or SUGGESTED' });
-  }
-
-  const paperId = parseInt(paper_title, 10);
-  if (isNaN(paperId)) {
-    return res.status(400).json({ success: false, error: 'paper_title must be the numeric paper ID' });
+    return res.status(400).json({ success: false, error: 'paper_title and status are required' });
   }
 
   try {
-    const paper = await QuestionPaper.findByPk(paperId, { include: [Question] });
-    if (!paper) {
-      return res.status(404).json({ success: false, error: 'Paper not found' });
-    }
+    const { rows: qRows } = await pool.query(
+      `SELECT q.id, q."QuestionPaperId" FROM "Questions" q
+       JOIN "QuestionPapers" qp ON qp.id = q."QuestionPaperId"
+       JOIN "Courses" c ON c.id = qp."CourseId"
+       WHERE qp.id IN (
+         SELECT id FROM "QuestionPapers" LIMIT 100
+       )`,
+      []
+    );
 
-    const questions = paper.Questions || [];
-    for (const q of questions) {
+    const reviewer_role = req.user.role;
+    for (const q of qRows) {
       await pool.query(
-        `INSERT INTO question_reviews
-           (paper_id, question_id, reviewer_id, reviewer_role, status, suggestion_text, reviewed_at)
-         VALUES ($1, $2, $3, $4, $5, NULL, NOW())
+        `INSERT INTO question_reviews (paper_id, question_id, reviewer_id, reviewer_role, status, suggestion_text)
+         VALUES ($1, $2, $3, $4, $5, NULL)
          ON CONFLICT (paper_id, question_id, reviewer_role)
-         DO UPDATE SET status = $5, suggestion_text = NULL, reviewed_at = NOW()`,
-        [paperId, q.id, req.user.id, req.user.role, status]
+         DO UPDATE SET status = EXCLUDED.status, suggestion_text = NULL, reviewed_at = NOW()`,
+        [q.QuestionPaperId, q.id, req.user.id, reviewer_role, status]
       );
     }
 
-    res.json({ success: true, updated: questions.length });
+    res.json({ success: true, message: `Bulk ${status} applied` });
   } catch (err) {
     console.error('POST /scrutinizer/review/bulk:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ── POST /api/scrutinizer/papers/:id/pass-to-s2 ──────────────────────────────
-// Scrutinizer 1 finishes reviewing and hands paper to Scrutinizer 2.
-// Body (optional): { comments }
-router.post('/papers/:id/pass-to-s2', requireScrutinizer, async (req, res) => {
-  if (!['scrutinizer', 'scrutinizer_1'].includes(req.user.role)) {
-    return res.status(403).json({ success: false, error: 'Only Scrutinizer 1 can pass papers to Scrutinizer 2' });
-  }
-  try {
-    const paper = await QuestionPaper.findByPk(req.params.id);
-    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
-
-    if (!['with_scrutinizer1', 'submitted'].includes(paper.status)) {
-      return res.status(400).json({
-        success: false,
-        error: `Paper is at stage '${paper.status}'. Must be at Scrutinizer 1 to pass forward.`
-      });
-    }
-
-    await paper.update({
-      status:               'with_scrutinizer2',
-      scrutinizer1Id:       req.user.id,
-      scrutinizer1Comments: req.body.comments || null,
-    });
-
-    res.json({ success: true, message: 'Paper passed to Scrutinizer 2', data: paper });
-  } catch (err) {
-    console.error('POST /scrutinizer/papers/:id/pass-to-s2:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-<<<<<<< HEAD
-// ─── GET /api/scrutinizer/approved-papers/random-three ───────────────────────
-router.get('/approved-papers/random-three', async (req, res) => {
-  const client = await pool.connect();
-  try {
-    // Get 3 random approved papers
-    const { rows: approvedList } = await client.query(
-      `SELECT paper_title FROM approved_papers ORDER BY RANDOM() LIMIT 3`
-    );
-
-    if (approvedList.length < 3) {
-      return res.json({
-        success: false,
-        error: `Only ${approvedList.length} approved paper(s) found. Need at least 3 for shuffling.`,
-        papers: []
-      });
-    }
-
-    // Fetch full questions for each approved paper
-    const papers = await Promise.all(
-      approvedList.map(async ({ paper_title }) => {
-        const { rows } = await client.query(
-          `SELECT * FROM ${QP_TABLE}
-           WHERE paper_title = $1
-           ORDER BY section,
-                    CAST(regexp_replace(question_no, '[^0-9]', '', 'g') AS INTEGER),
-                    question_no`,
-          [paper_title]
-        );
-
-        // Group by section
-        const sections = { '2M': [], '6M': [], '12M': [] };
-        rows.forEach(q => {
-          if (sections[q.section]) {
-            sections[q.section].push({
-              id: q.id,
-              paper_title: q.paper_title,
-              section: q.section,
-              question_no: q.question_no,
-              marks: q.marks,
-              question: q.question
-            });
-          }
-        });
-
-        return { paper_title, sections };
-      })
-    );
-
-    res.json({ success: true, papers });
-  } catch (err) {
-    console.error('GET /scrutinizer/approved-papers/random-three:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// ─── GET /api/scrutinizer/approved-papers/random-three ────────────────────────
-// Returns 3 random approved papers with full question details for final paper generation
-router.get('/approved-papers/random-three', async (req, res) => {
-  const client = await pool.connect();
-  try {
-    // Get 3 random approved papers
-    const { rows: approvedTitles } = await client.query(
-      `SELECT paper_title FROM approved_papers ORDER BY RANDOM() LIMIT 3`
-    );
-
-    if (approvedTitles.length < 3) {
-      return res.status(404).json({ 
-        success: false, 
-        error: `Only ${approvedTitles.length} approved papers found. Need at least 3.` 
-      });
-    }
-
-    // Fetch full question details for each paper
-    const papers = [];
-    for (const { paper_title } of approvedTitles) {
-      const { rows } = await client.query(
-        `SELECT * FROM ${QP_TABLE}
-         WHERE paper_title = $1
-         ORDER BY section,
-                  CAST(regexp_replace(question_no, '[^0-9]', '', 'g') AS INTEGER),
-                  question_no`,
-        [paper_title]
-      );
-
-      // Group by section
-      const sections = { '2M': [], '6M': [], '12M': [] };
-      for (const row of rows) {
-        if (sections[row.section]) {
-          sections[row.section].push({
-            id: row.id,
-            paper_title: row.paper_title,
-            section: row.section,
-            question_no: row.question_no,
-            marks: row.marks,
-            question: row.question,
-          });
-        }
-      }
-
-      papers.push({ paper_title, sections });
-    }
-
-    res.json({ success: true, papers });
-  } catch (err) {
-    console.error('GET /scrutinizer/approved-papers/random-three:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// ─── POST /api/scrutinizer/save-final-paper ──────────────────────────────────
-router.post('/save-final-paper', async (req, res) => {
-  const { final_paper_title, questions, source_papers } = req.body;
-
-  if (!final_paper_title || !questions || !Array.isArray(questions)) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Missing required fields: final_paper_title, questions (array)' 
-    });
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Create final_paper table if doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS final_paper (
-        id SERIAL PRIMARY KEY,
-        final_paper_title VARCHAR(255) NOT NULL,
-        section VARCHAR(10) NOT NULL,
-        question_no VARCHAR(10) NOT NULL,
-        marks INTEGER NOT NULL,
-        question TEXT NOT NULL,
-        source_paper_title VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(final_paper_title, question_no)
-      )
-    `);
-
-    // Delete existing (if regenerating)
-    await client.query(
-      `DELETE FROM final_paper WHERE final_paper_title = $1`,
-      [final_paper_title]
-    );
-
-    // Insert all questions
-    for (const q of questions) {
-      await client.query(
-        `INSERT INTO final_paper 
-         (final_paper_title, section, question_no, marks, question, source_paper_title)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          final_paper_title,
-          q.section,
-          q.question_no,
-          q.marks,
-          q.question,
-          q.source_paper_title || q.paper_title
-        ]
-      );
-    }
-
-    // Store metadata
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS final_paper_metadata (
-        id SERIAL PRIMARY KEY,
-        final_paper_title VARCHAR(255) NOT NULL UNIQUE,
-        source_papers TEXT[] NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-
-    await client.query(
-      `INSERT INTO final_paper_metadata (final_paper_title, source_papers)
-       VALUES ($1, $2)
-       ON CONFLICT (final_paper_title) 
-       DO UPDATE SET source_papers = $2, created_at = NOW()`,
-      [final_paper_title, source_papers || []]
-    );
-
-    await client.query('COMMIT');
-
-    res.json({ 
-      success: true, 
-      message: `Final paper saved with ${questions.length} questions`,
-      final_paper_title,
-      questions_count: questions.length
-    });
-
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('POST /scrutinizer/save-final-paper:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-module.exports = router;
-=======
-// ── POST /api/scrutinizer/papers/:id/approve ─────────────────────────────────
-// Scrutinizer 2 approves the paper.
-router.post('/papers/:id/approve', requireScrutinizer, async (req, res) => {
-  if (!['scrutinizer', 'scrutinizer_2'].includes(req.user.role)) {
-    return res.status(403).json({ success: false, error: 'Only Scrutinizer 2 can approve papers' });
-  }
-  try {
-    const paper = await QuestionPaper.findByPk(req.params.id);
-    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
-
-    if (paper.status !== 'with_scrutinizer2') {
-      return res.status(400).json({
-        success: false,
-        error: `Paper is at stage '${paper.status}'. Must be at Scrutinizer 2 to approve.`
-      });
-    }
-
-    await paper.update({
-      status:         'scrutinizer2_approved',
-      scrutinizer2Id: req.user.id,
-      reviewedBy:     req.user.id,
-    });
-
-    const approvedCount = await QuestionPaper.count({
-      where: { CourseId: paper.CourseId, status: 'scrutinizer2_approved' }
-    });
-
-    res.json({
-      success: true,
-      message: 'Paper approved by Scrutinizer 2',
-      approvedCountForCourse: approvedCount,
-      readyForRandomization:  approvedCount >= 3,
-      data: paper
-    });
-  } catch (err) {
-    console.error('POST /scrutinizer/papers/:id/approve:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ── POST /api/scrutinizer/papers/:id/reject ──────────────────────────────────
-// Scrutinizer 1 OR Scrutinizer 2 sends the paper back to faculty for revision.
-// Body: { comments }  (required)
-router.post('/papers/:id/reject', requireScrutinizer, async (req, res) => {
-  if (!['scrutinizer', 'scrutinizer_1', 'scrutinizer_2'].includes(req.user.role)) {
-    return res.status(403).json({ success: false, error: 'Only Scrutinizers can reject papers' });
-  }
-  const { comments } = req.body;
-  if (!comments?.trim()) {
-    return res.status(400).json({ success: false, error: 'Rejection comments are required' });
-  }
-  try {
-    const paper = await QuestionPaper.findByPk(req.params.id);
-    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
-
-    const isS1 = ['scrutinizer', 'scrutinizer_1'].includes(req.user.role) && paper.status === 'with_scrutinizer1';
-    const isS2 = ['scrutinizer', 'scrutinizer_2'].includes(req.user.role) && paper.status === 'with_scrutinizer2';
-
-    if (!isS1 && !isS2) {
-      return res.status(400).json({
-        success: false,
-        error: `Cannot reject paper at stage '${paper.status}' with role '${req.user.role}'`
-      });
-    }
-
-    const updateData = {
-      status:        'needs_revision',
-      revisionCount: (paper.revisionCount || 0) + 1,
-    };
-
-    if (isS1) {
-      updateData.scrutinizer1Id       = req.user.id;
-      updateData.scrutinizer1Comments = comments;
-    } else {
-      updateData.scrutinizer2Id       = req.user.id;
-      updateData.scrutinizer2Comments = comments;
-    }
-
-    await paper.update(updateData);
-
-    res.json({
-      success:       true,
-      message:       'Paper sent back to faculty for revision',
-      revisionCount: paper.revisionCount,
-      data:          paper
-    });
-  } catch (err) {
-    console.error('POST /scrutinizer/papers/:id/reject:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ── GET /api/scrutinizer/approved-papers ─────────────────────────────────────
-// Shows courses where 3 papers are approved and ready for randomization.
-router.get('/approved-papers', requireScrutinizer, async (req, res) => {
+// ─────────────────────────────────────────────
+// GET /api/scrutinizer/approved-papers
+// Returns papers grouped by course for S2 randomization panel
+// ─────────────────────────────────────────────
+router.get('/approved-papers', async (req, res) => {
   try {
     const papers = await QuestionPaper.findAll({
-      where: { status: 'scrutinizer2_approved' },
-      include: [
-        { model: Course, attributes: ['id', 'courseCode', 'courseName'] },
-        { model: User, as: 'creator', attributes: ['id', 'username'] },
-      ],
-      order: [['CourseId', 'ASC'], ['createdAt', 'ASC']]
+      where: { status: 'with_scrutinizer2' },
+      include: [{ model: Course, attributes: ['id', 'courseCode', 'courseName'] }],
+      order: [['createdAt', 'DESC']],
     });
 
-    const groups = {};
+    // Group by course
+    const groupMap = {};
     for (const p of papers) {
-      const cid = p.CourseId;
-      if (!groups[cid]) {
-        groups[cid] = {
-          courseId:   cid,
-          courseCode: p.Course?.courseCode,
-          courseName: p.Course?.courseName,
-          papers:     []
+      const cid = p.Course?.id;
+      if (!cid) continue;
+      if (!groupMap[cid]) {
+        groupMap[cid] = {
+          courseId: cid,
+          courseCode: p.Course.courseCode,
+          courseName: p.Course.courseName,
+          count: 0,
+          readyForRandomization: false,
         };
       }
-      groups[cid].papers.push({
-        id:        p.id,
-        examType:  p.examType,
-        catNumber: p.catNumber,
-        createdBy: p.creator?.username || 'Unknown',
-      });
+      groupMap[cid].count++;
+    }
+    // Need at least 2 papers to shuffle
+    for (const g of Object.values(groupMap)) {
+      g.readyForRandomization = g.count >= 2;
     }
 
-    const result = Object.values(groups).map(g => ({
-      ...g,
-      count:                 g.papers.length,
-      readyForRandomization: g.papers.length >= 3,
-    }));
-
-    res.json({ success: true, groups: result });
+    res.json({ success: true, groups: Object.values(groupMap), data: papers });
   } catch (err) {
     console.error('GET /scrutinizer/approved-papers:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ── POST /api/scrutinizer/randomize/:courseId ─────────────────────────────────
-// Scrutinizer 2 shuffles question slots across 3 approved papers and creates
-// a new randomized final paper that moves forward to panel/HOD flow.
-router.post('/randomize/:courseId', requireScrutinizer, async (req, res) => {
-  if (!['scrutinizer', 'scrutinizer_2'].includes(req.user.role)) {
-    return res.status(403).json({ success: false, error: 'Only Scrutinizer 2 can randomize papers' });
-  }
-  const courseId = parseInt(req.params.courseId, 10);
-  if (isNaN(courseId)) {
-    return res.status(400).json({ success: false, error: 'Invalid courseId' });
-  }
+// ─────────────────────────────────────────────
+// GET /api/scrutinizer/papers/:id/verify-mapping
+// Scrutinizer 2: run CO/KL analysis on all questions in a paper
+// and compare against what faculty assigned
+// ─────────────────────────────────────────────
+router.get('/papers/:id/verify-mapping', async (req, res) => {
   try {
-    const existingFinal = await QuestionPaper.findOne({
-      where: {
-        CourseId: courseId,
-        status: { [Op.in]: ['randomized', 'with_panel', 'with_hod', 'hod_approved'] }
-      }
-    });
-
-    if (existingFinal) {
-      return res.status(400).json({
-        success: false,
-        error: `A final paper already exists for this course (paper #${existingFinal.id}, status '${existingFinal.status}').`
-      });
-    }
-
-    const approved = await QuestionPaper.findAll({
-      where: { CourseId: courseId, status: 'scrutinizer2_approved' },
+    const CourseOutcome = require('../models/CourseOutcome');
+    const paper = await QuestionPaper.findByPk(req.params.id, {
       include: [
-        { model: Course, attributes: ['courseCode', 'courseName'] },
-        { model: Question }
+        { model: Course, attributes: ['id', 'courseCode', 'courseName'] },
+        { model: Question, include: [{ model: CourseOutcome, attributes: ['id', 'coNumber'] }] },
       ],
-      order:  [['createdAt', 'ASC']],
-      limit:  3
     });
 
-    if (approved.length < 3) {
-      return res.status(400).json({
-        success: false,
-        error:   `Need 3 approved papers to randomize. Currently have ${approved.length}.`
-      });
-    }
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
 
-    const slotMap = new Map();
-    for (const p of approved) {
-      for (const q of (p.Questions || [])) {
-        const key = `${q.part}:${q.questionNumber}`;
-        if (!slotMap.has(key)) slotMap.set(key, []);
-        slotMap.get(key).push(q);
+    const NLPService = require('../services/nlpService');
+    const questions = paper.Questions || [];
+    const results = [];
+
+    for (const q of questions) {
+      let analysis = null;
+      let error = null;
+      try {
+        analysis = await NLPService.analyzeQuestion(q.questionText, paper.CourseId);
+      } catch (e) {
+        error = e.message;
       }
+
+      const assignedKL = q.klLevel || null;
+      const assignedCO = q.CourseOutcome?.coNumber || null;  // e.g. "CO1", not "CO24"
+      const suggestedKL = analysis?.kl?.level || null;
+      const suggestedCO = analysis?.co?.number || null;
+
+      const klMatch = assignedKL && suggestedKL ? assignedKL === suggestedKL : null;
+      const coMatch = assignedCO && suggestedCO ? assignedCO === suggestedCO : null;
+      const isValid = klMatch !== false && coMatch !== false;
+
+      results.push({
+        id: q.id,
+        questionNumber: q.questionNumber,
+        part: q.part,
+        marks: q.marks,
+        questionText: q.questionText,
+        assigned: { kl: assignedKL, co: assignedCO },
+        suggested: {
+          kl: suggestedKL,
+          co: suggestedCO,
+          klVerb: analysis?.kl?.verb,
+          klConfidence: analysis?.kl?.confidence,
+          coConfidence: analysis?.co?.confidence,
+          coDescription: analysis?.co?.description,
+        },
+        klMatch,
+        coMatch,
+        isValid,
+        error,
+      });
     }
 
-    const questionOrder = { A: 1, B: 2, C: 3 };
-    const referenceQuestions = (approved[0].Questions || [])
-      .slice()
-      .sort((a, b) => {
-        const diff = (questionOrder[a.part] || 9) - (questionOrder[b.part] || 9);
-        return diff !== 0 ? diff : a.questionNumber - b.questionNumber;
-      });
-
-    const mixedQuestions = referenceQuestions.map(refQ => {
-      const key = `${refQ.part}:${refQ.questionNumber}`;
-      const poolForSlot = slotMap.get(key) || [refQ];
-      const pick = poolForSlot[Math.floor(Math.random() * poolForSlot.length)];
-      return {
-        part: refQ.part,
-        questionNumber: refQ.questionNumber,
-        questionText: pick.questionText,
-        marks: refQ.marks,
-        klLevel: pick.klLevel,
-        piIndicators: pick.piIndicators,
-        CourseOutcomeId: pick.CourseOutcomeId || refQ.CourseOutcomeId || null,
-      };
-    });
-
-    const template = approved[0];
-    const finalPaper = await QuestionPaper.create({
-      CourseId: template.CourseId,
-      examType: template.examType,
-      catNumber: template.catNumber,
-      examDate: template.examDate,
-      status: 'randomized',
-      createdBy: template.createdBy,
-      scrutinizer2Id: req.user.id,
-      reviewedBy: req.user.id,
-      reviewComments: `Randomized final generated from approved papers: ${approved.map(p => p.id).join(', ')}`,
-    });
-
-    await Question.bulkCreate(
-      mixedQuestions.map(q => ({ ...q, QuestionPaperId: finalPaper.id }))
-    );
-
-    await QuestionPaper.update(
-      {
-        status: 'finalized',
-        finalizationNotes: `Used in randomization for final paper #${finalPaper.id}`
-      },
-      { where: { id: approved.map(p => p.id) } }
-    );
+    const totalQ = results.length;
+    const validQ = results.filter(r => r.isValid).length;
+    const klMismatches = results.filter(r => r.klMatch === false).length;
+    const coMismatches = results.filter(r => r.coMatch === false).length;
 
     res.json({
-      success:         true,
-      message:         'Randomization complete. Final paper generated from shuffled approved questions.',
-      finalPaperId:    finalPaper.id,
-      finalPaperTitle: buildDisplayTitle(finalPaper),
-      sourcePaperIds:  approved.map(p => p.id),
+      success: true,
+      paperId: paper.id,
+      courseCode: paper.Course?.courseCode,
+      courseName: paper.Course?.courseName,
+      summary: { totalQ, validQ, klMismatches, coMismatches, allValid: validQ === totalQ },
+      questions: results,
     });
   } catch (err) {
-    console.error('POST /scrutinizer/randomize/:courseId:', err.message);
+    console.error('GET /scrutinizer/papers/:id/verify-mapping:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ── POST /api/scrutinizer/papers/:id/send-to-panel ───────────────────────────
-// Scrutinizer 2 sends the randomized final paper to the Panel Member queue.
-router.post('/papers/:id/send-to-panel', requireScrutinizer, async (req, res) => {
-  if (!['scrutinizer', 'scrutinizer_2'].includes(req.user.role)) {
-    return res.status(403).json({ success: false, error: 'Only Scrutinizer 2 can send papers to the panel' });
+// ─────────────────────────────────────────────
+// GET /api/scrutinizer/paper/:id/questions
+// ─────────────────────────────────────────────
+router.get('/paper/:id/questions', async (req, res) => {
+  const paperId = req.params.id;
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM "Questions" WHERE "QuestionPaperId" = $1 ORDER BY id`,
+      [paperId]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('Error fetching questions:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/papers/:id/pass-to-s2
+// Scrutinizer 1 passes paper to Scrutinizer 2
+// ─────────────────────────────────────────────
+router.post('/papers/:id/pass-to-s2', async (req, res) => {
+  const { comments } = req.body;
+  try {
+    const paper = await QuestionPaper.findByPk(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    if (paper.status !== 'with_scrutinizer1') {
+      return res.status(400).json({ success: false, error: `Paper must be at scrutinizer1 stage. Current: '${paper.status}'` });
+    }
+
+    await paper.update({
+      status: 'with_scrutinizer2',
+      scrutinizer1Id: req.user.id,
+      scrutinizer1Comments: comments || null,
+    });
+
+    res.json({ success: true, message: 'Paper forwarded to Scrutinizer 2', data: paper });
+  } catch (err) {
+    console.error('POST /scrutinizer/papers/:id/pass-to-s2:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/papers/:id/approve
+// Scrutinizer 2 approves a paper — sends directly to panel
+// ─────────────────────────────────────────────
+router.post('/papers/:id/approve', async (req, res) => {
+  const { comments } = req.body;
+  try {
+    const paper = await QuestionPaper.findByPk(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    if (paper.status !== 'with_scrutinizer2') {
+      return res.status(400).json({ success: false, error: `Paper must be at scrutinizer2 stage. Current: '${paper.status}'` });
+    }
+
+    await paper.update({
+      status: 'with_panel',
+      scrutinizer2Id: req.user.id,
+      scrutinizer2Comments: comments || null,
+    });
+
+    res.json({ success: true, message: 'Paper approved by Scrutinizer 2 and sent to Panel', data: paper });
+  } catch (err) {
+    console.error('POST /scrutinizer/papers/:id/approve:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/papers/:id/reject
+// Scrutinizer 2 rejects a paper (sends back to faculty)
+// ─────────────────────────────────────────────
+router.post('/papers/:id/reject', async (req, res) => {
+  const { comments } = req.body;
+  if (!comments?.trim()) {
+    return res.status(400).json({ success: false, error: 'Comments are required when rejecting a paper' });
   }
   try {
     const paper = await QuestionPaper.findByPk(req.params.id);
     if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
 
-    if (paper.status !== 'randomized') {
-      return res.status(400).json({
-        success: false,
-        error:   `Only randomized papers can be sent to the panel. Current: '${paper.status}'.`
-      });
+    if (!['with_scrutinizer1', 'with_scrutinizer2'].includes(paper.status)) {
+      return res.status(400).json({ success: false, error: `Paper cannot be rejected at stage '${paper.status}'` });
     }
 
-    await paper.update({ status: 'with_panel', reviewedBy: req.user.id });
-    res.json({ success: true, message: 'Final paper sent to Panel Member', data: paper });
+    await paper.update({
+      status: 'needs_revision',
+      scrutinizer2Id: req.user.id,
+      scrutinizer2Comments: comments,
+      revisionCount: (paper.revisionCount || 0) + 1,
+    });
+
+    res.json({ success: true, message: 'Paper sent back to faculty for revision', data: paper });
+  } catch (err) {
+    console.error('POST /scrutinizer/papers/:id/reject:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/papers/:id/send-to-panel
+// Send a randomized paper to the panel
+// ─────────────────────────────────────────────
+router.post('/papers/:id/send-to-panel', async (req, res) => {
+  try {
+    const paper = await QuestionPaper.findByPk(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    if (!['randomized', 'scrutinizer2_approved'].includes(paper.status)) {
+      return res.status(400).json({ success: false, error: `Paper must be randomized or S2-approved to send to panel. Current: '${paper.status}'` });
+    }
+
+    await paper.update({ status: 'with_panel' });
+
+    res.json({ success: true, message: 'Paper sent to panel', data: paper });
   } catch (err) {
     console.error('POST /scrutinizer/papers/:id/send-to-panel:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ── GET /api/scrutinizer/status ───────────────────────────────────────────────
-router.get('/status', requireScrutinizer, async (req, res) => {
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/randomize/:courseId
+// Shuffle questions across all S2-approved papers for a course.
+// For each question slot, randomly pick one question from the
+// same slot across all available papers → build one final QP
+// → save it as a new QuestionPaper with status 'with_panel'
+// ─────────────────────────────────────────────
+router.post('/randomize/:courseId', async (req, res) => {
+  const { courseId } = req.params;
   try {
-    const stages = [
-      'draft', 'submitted', 'with_scrutinizer1', 'with_scrutinizer2',
-      'needs_revision', 'scrutinizer2_approved', 'reviewed',
-      'randomized', 'finalized', 'with_panel', 'with_hod', 'hod_approved'
-    ];
+    // 1. Fetch all S2-approved papers for this course, with their questions
+    const papers = await QuestionPaper.findAll({
+      where: { status: 'with_scrutinizer2', CourseId: courseId },
+      include: [
+        { model: Question },
+        { model: Course, attributes: ['id', 'courseCode', 'courseName'] },
+      ],
+    });
 
-    const counts = {};
-    await Promise.all(stages.map(async (s) => {
-      counts[s] = await QuestionPaper.count({ where: { status: s } });
-    }));
+    if (papers.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: `Need at least 2 papers with status 'with_scrutinizer2' for this course to shuffle. Found: ${papers.length}`
+      });
+    }
 
-    const total = await QuestionPaper.count();
-    res.json({ success: true, summary: { total, ...counts } });
+    // 2. Group questions by part + questionNumber slot across all papers
+    //    slotMap: { "A-1": [q from paper1, q from paper2, ...], "B-5": [...], ... }
+    const slotMap = {};
+    for (const paper of papers) {
+      for (const q of (paper.Questions || [])) {
+        const key = `${q.part}-${q.questionNumber}`;
+        if (!slotMap[key]) slotMap[key] = [];
+        slotMap[key].push(q);
+      }
+    }
+
+    if (Object.keys(slotMap).length === 0) {
+      return res.status(400).json({ success: false, error: 'No questions found in these papers' });
+    }
+
+    // 3. For each slot, randomly pick one question
+    const pickedQuestions = Object.entries(slotMap).map(([slot, candidates]) => {
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      return {
+        part: chosen.part,
+        questionNumber: chosen.questionNumber,
+        questionText: chosen.questionText,
+        marks: chosen.marks,
+        klLevel: chosen.klLevel,
+        piIndicators: chosen.piIndicators || [],
+        CourseOutcomeId: chosen.CourseOutcomeId,
+        sourcePaperId: chosen.QuestionPaperId,
+      };
+    });
+
+    // Sort by part then questionNumber for clean ordering
+    pickedQuestions.sort((a, b) => {
+      if (a.part !== b.part) return a.part.localeCompare(b.part);
+      return a.questionNumber - b.questionNumber;
+    });
+
+    // 4. Create the new shuffled QuestionPaper
+    const refPaper = papers[0];
+    const shuffledPaper = await QuestionPaper.create({
+      CourseId: courseId,
+      examType: refPaper.examType,
+      catNumber: refPaper.catNumber,
+      examDate: refPaper.examDate,
+      status: 'with_panel',
+      createdBy: refPaper.createdBy,
+      scrutinizer2Id: req.user.id,
+      scrutinizer2Comments: `Shuffled from ${papers.length} papers by Scrutinizer 2`,
+    });
+
+    // 5. Bulk-create the picked questions under the new paper
+    await Question.bulkCreate(
+      pickedQuestions.map(q => ({
+        QuestionPaperId: shuffledPaper.id,
+        part: q.part,
+        questionNumber: q.questionNumber,
+        questionText: q.questionText,
+        marks: q.marks,
+        klLevel: q.klLevel,
+        piIndicators: q.piIndicators,
+        CourseOutcomeId: q.CourseOutcomeId,
+      }))
+    );
+
+    // 6. Mark all source papers as 'randomized' so they leave the S2 queue
+    await QuestionPaper.update(
+      { status: 'randomized' },
+      { where: { id: papers.map(p => p.id) } }
+    );
+
+    res.json({
+      success: true,
+      message: `Shuffled paper created from ${papers.length} papers (${pickedQuestions.length} questions) and sent to Panel`,
+      shuffledPaperId: shuffledPaper.id,
+      sourceCount: papers.length,
+      questionCount: pickedQuestions.length,
+    });
+
   } catch (err) {
-    console.error('GET /scrutinizer/status:', err.message);
+    console.error('POST /scrutinizer/randomize/:courseId:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
+// ─────────────────────────────────────────────
+// POST /api/scrutinizer/check-cok  (legacy)
+// CO-K mapping check + store result
+// ─────────────────────────────────────────────
+router.post('/check-cok', async (req, res) => {
+  const { paper_id, questions } = req.body;
+
+  if (!paper_id || !questions) {
+    return res.status(400).json({ success: false, error: 'paper_id and questions required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let allCorrect = true;
+    const reasons = [];
+
+    for (const q of questions) {
+      const { question_id, isValid, question_no } = q;
+
+      await client.query(
+        `INSERT INTO question_reviews (paper_id, question_id, reviewer_id, reviewer_role, status, suggestion_text)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (paper_id, question_id, reviewer_role)
+         DO UPDATE SET status = EXCLUDED.status, suggestion_text = EXCLUDED.suggestion_text, reviewed_at = NOW()`,
+        [paper_id, question_id, req.user.id, 'scrutinizer_1', isValid ? 'APPROVED' : 'SUGGESTED', isValid ? null : 'Fix CO-K mapping']
+      );
+
+      if (!isValid) {
+        allCorrect = false;
+        reasons.push(`Q${question_no} invalid`);
+      }
+    }
+
+    if (allCorrect) {
+      await client.query(
+        `UPDATE "QuestionPapers" SET status = 'with_scrutinizer2', "scrutinizer1Id" = $1 WHERE id = $2`,
+        [req.user.id, paper_id]
+      );
+    } else {
+      await client.query(
+        `UPDATE "QuestionPapers" SET status = 'needs_revision', "scrutinizer1Id" = $1, "scrutinizer1Comments" = $2, "revisionCount" = "revisionCount" + 1 WHERE id = $3`,
+        [req.user.id, reasons.join(', '), paper_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: allCorrect ? 'Approved and sent to Scrutinizer 2' : 'Sent back for revision' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error in CO-K check:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
->>>>>>> 6d4e59f3 (Updated backend and frontend changes)

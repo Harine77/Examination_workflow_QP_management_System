@@ -52,47 +52,41 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create new course with outcomes (All authenticated users can create courses)
+// Create new course with outcomes — reuses existing course if courseCode already exists
 router.post('/', async (req, res) => {
   try {
     const { courseCode, courseName, semester, syllabus, outcomes } = req.body;
-    
-    // Create course
-    const course = await Course.create({
-      courseCode,
-      courseName,
-      semester,
-      syllabus
-    });
-    
-    // Create course outcomes if provided
-    if (outcomes && outcomes.length > 0) {
-      const outcomePromises = outcomes.map(outcome => 
-        CourseOutcome.create({
-          CourseId: course.id,
-          coNumber: outcome.coNumber,
-          description: outcome.description,
-          keywords: outcome.keywords || []
-        })
-      );
-      
-      await Promise.all(outcomePromises);
+
+    // Find existing course or create a new one
+    let course = await Course.findOne({ where: { courseCode } });
+
+    if (!course) {
+      course = await Course.create({ courseCode, courseName, semester, syllabus });
+
+      if (outcomes && outcomes.length > 0) {
+        await Promise.all(outcomes.map(outcome =>
+          CourseOutcome.create({
+            CourseId: course.id,
+            coNumber: outcome.coNumber,
+            description: outcome.description,
+            keywords: outcome.keywords || []
+          })
+        ));
+      }
     }
-    
-    // Return course with outcomes
-    const createdCourse = await Course.findByPk(course.id, {
-      include: [CourseOutcome]
-    });
-    
+    // If course already exists we reuse it as-is (same COs apply to all QPs for that course)
+
+    const result = await Course.findByPk(course.id, { include: [CourseOutcome] });
+
     res.status(201).json({
       success: true,
-      message: 'Course created successfully',
-      data: createdCourse
+      message: course ? 'Course reused (already exists)' : 'Course created successfully',
+      data: result
     });
-    
+
   } catch (error) {
     console.error('Error creating course:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Failed to create course',
       message: error.message
