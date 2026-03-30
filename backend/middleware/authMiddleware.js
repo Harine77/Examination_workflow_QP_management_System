@@ -74,12 +74,23 @@ exports.canCreate = (req, res, next) => {
   next();
 };
 
-// Check if user can edit question papers (Faculty and Scrutinizer)
+// Check if user can edit question papers (Faculty and any Scrutinizer variant)
 exports.canEdit = (req, res, next) => {
-  if (!['faculty', 'scrutinizer'].includes(req.user.role)) {
+  if (!['faculty', 'scrutinizer', 'scrutinizer_1', 'scrutinizer_2'].includes(req.user.role)) {
     return res.status(403).json({
       success: false,
-      message: 'Only Faculty and Scrutinizer can edit question papers'
+      message: 'Only Faculty and Scrutinizers can edit question papers'
+    });
+  }
+  next();
+};
+
+// Check if user is any kind of scrutinizer
+exports.isScrutinizer = (req, res, next) => {
+  if (!['scrutinizer', 'scrutinizer_1', 'scrutinizer_2'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only Scrutinizers can access this route'
     });
   }
   next();

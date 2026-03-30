@@ -51,6 +51,8 @@ const Signup = () => {
       const userRole = response.data.data?.role;
       switch(userRole) {
         case 'scrutinizer':
+        case 'scrutinizer_1':
+        case 'scrutinizer_2':
           navigate('/scrutinizer');
           break;
         case 'hod':
@@ -132,9 +134,10 @@ const Signup = () => {
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
               >
                 <option value="faculty">Faculty (Create Papers)</option>
-                <option value="scrutinizer">Scrutinizer (Review Papers)</option>
-                <option value="panel_member">Panel Member (View Only)</option>
-                <option value="hod">HOD (Finalize Papers)</option>
+                <option value="scrutinizer_1">Scrutinizer 1 (First Review)</option>
+                <option value="scrutinizer_2">Scrutinizer 2 (Final Review)</option>
+                <option value="panel_member">Panel Member</option>
+                <option value="hod">HOD (Final Approval)</option>
               </select>
             </div>
 

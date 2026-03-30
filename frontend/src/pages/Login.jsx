@@ -29,6 +29,8 @@ const Login = () => {
       // Navigate based on role
       switch(userRole) {
         case 'scrutinizer':
+        case 'scrutinizer_1':
+        case 'scrutinizer_2':
           navigate('/scrutinizer');
           break;
         case 'hod':
@@ -128,7 +130,8 @@ const Login = () => {
             <p className="text-sm font-semibold text-gray-700 mb-2">Demo Accounts:</p>
             <div className="text-xs text-gray-600 space-y-1">
               <p>📘 <strong>Faculty:</strong> faculty@example.com / faculty123</p>
-              <p>📗 <strong>Scrutinizer:</strong> scrutinizer@example.com / scrutinizer123</p>
+              <p>📗 <strong>Scrutinizer 1:</strong> scrutinizer1@example.com / scrutinizer123</p>
+              <p>📗 <strong>Scrutinizer 2:</strong> scrutinizer2@example.com / scrutinizer123</p>
               <p>📙 <strong>Panel:</strong> panel@example.com / panel123</p>
               <p>📕 <strong>HOD:</strong> hod@example.com / hod123</p>
             </div>

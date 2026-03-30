@@ -34,10 +34,18 @@ const QuestionPapers = () => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      draft: { color: 'bg-gray-500', text: 'Draft' },
-      submitted: { color: 'bg-blue-500', text: 'Submitted' },
-      reviewed: { color: 'bg-green-500', text: 'Reviewed' },
-      finalized: { color: 'bg-purple-500', text: 'Finalized' }
+      draft:                 { color: 'bg-gray-500',    text: 'Draft' },
+      submitted:             { color: 'bg-blue-500',    text: 'Submitted' },
+      with_scrutinizer1:     { color: 'bg-blue-600',    text: 'With Scrutinizer 1' },
+      with_scrutinizer2:     { color: 'bg-violet-600',  text: 'With Scrutinizer 2' },
+      needs_revision:        { color: 'bg-red-500',     text: 'Needs Revision' },
+      scrutinizer2_approved: { color: 'bg-emerald-600', text: 'S2 Approved' },
+      randomized:            { color: 'bg-amber-500',   text: 'Randomized' },
+      with_panel:            { color: 'bg-cyan-600',    text: 'With Panel' },
+      with_hod:              { color: 'bg-purple-600',  text: 'With HOD' },
+      hod_approved:          { color: 'bg-green-600',   text: 'HOD Approved' },
+      reviewed:              { color: 'bg-green-500',   text: 'Reviewed' },
+      finalized:             { color: 'bg-purple-500',  text: 'Finalized' },
     };
     const config = statusConfig[status] || { color: 'bg-gray-500', text: status };
     return (

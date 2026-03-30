@@ -11,8 +11,9 @@ function QuestionPaperCreator() {
     courseName: '',
     semester: '',
     department: '',
-    degree: '',
+    degree: 'B.E. / B.Tech.',
     branch: '',
+    regulation: 'R2021',
     catNumber: '',
     examDate: '',
     month: '',
@@ -30,6 +31,10 @@ function QuestionPaperCreator() {
   const [questions, setQuestions] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [courseId, setCourseId] = useState(null);
+  const [coIdMap, setCoIdMap] = useState({}); // { 'CO1': dbId, 'CO2': dbId, ... }
+  const [paperId, setPaperId] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Initialize questions based on exam format
   const initializeQuestions = (format) => {
@@ -124,7 +129,16 @@ function QuestionPaperCreator() {
         }))
       });
 
-      setCourseId(response.data.data.id);  // CHANGED: Updated response structure
+      const savedCourse = response.data.data;
+      setCourseId(savedCourse.id);
+
+      // Build a CO number → DB id map so questions can reference their CourseOutcome FK
+      const map = {};
+      (savedCourse.CourseOutcomes || []).forEach(co => {
+        map[co.coNumber] = co.id;
+      });
+      setCoIdMap(map);
+
       toast.success('✅ Course information saved!');
       setStep(3);
     } catch (error) {
@@ -193,6 +207,74 @@ function QuestionPaperCreator() {
     }));
   };
 
+  const saveAndSubmit = async () => {
+    const allParts = [...questions.partA, ...questions.partB, ...questions.partC];
+    const emptyQuestions = allParts.filter(q => !q.text.trim());
+    if (emptyQuestions.length > 0) {
+      toast.warning(`Please fill all ${emptyQuestions.length} empty question(s) before submitting`);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      toast.info('💾 Saving paper to database...');
+
+      // 1. Create the QuestionPaper record (status: draft)
+      const paperRes = await api.post('/questions/paper', {
+        courseId,
+        examType: examFormat,
+        catNumber: courseInfo.catNumber || null,
+        examDate: courseInfo.examDate || null,
+      });
+      const pid = paperRes.data.data.id;
+      setPaperId(pid);
+
+      // 2. Bulk-save all questions
+      const questionPayload = [
+        ...questions.partA.map(q => ({
+          part: 'A',
+          questionNumber: q.number,
+          questionText: q.text,
+          marks: q.marks,
+          klLevel: q.kl || 'K1',
+          piIndicators: q.pi ? q.pi.split(',').map(p => p.trim()).filter(Boolean) : [],
+          courseOutcomeId: coIdMap[q.co] || null,
+        })),
+        ...questions.partB.map(q => ({
+          part: 'B',
+          questionNumber: q.number,
+          questionText: q.text,
+          marks: q.marks,
+          klLevel: q.kl || 'K1',
+          piIndicators: q.pi ? q.pi.split(',').map(p => p.trim()).filter(Boolean) : [],
+          courseOutcomeId: coIdMap[q.co] || null,
+        })),
+        ...questions.partC.map(q => ({
+          part: 'C',
+          questionNumber: q.number,
+          questionText: q.text,
+          marks: q.marks,
+          klLevel: q.kl || 'K1',
+          piIndicators: q.pi ? q.pi.split(',').map(p => p.trim()).filter(Boolean) : [],
+          courseOutcomeId: coIdMap[q.co] || null,
+        })),
+      ];
+
+      await api.post(`/questions/papers/${pid}/questions`, { questions: questionPayload });
+
+      // 3. Submit to Scrutinizer 1
+      await api.post(`/questions/papers/${pid}/submit`);
+
+      setSubmitted(true);
+      toast.success('✅ Paper submitted to Scrutinizer 1!');
+    } catch (error) {
+      console.error('Submit error:', error);
+      toast.error(error.response?.data?.error || 'Failed to submit paper. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const downloadPDF = async () => {
     const allParts = [...questions.partA, ...questions.partB, ...questions.partC];
     const emptyQuestions = allParts.filter(q => !q.text.trim());
@@ -240,9 +322,18 @@ function QuestionPaperCreator() {
   };
 
   const getExamDetails = () => {
-    if (examFormat === 'CAT' || examFormat === 'SAT') {
+    if (examFormat === 'CAT') {
       return {
-        title: `Continuous Assessment Test${examFormat === 'CAT' ? ` - ${courseInfo.catNumber}` : ''}`,
+        title: `Continuous Assessment Test – ${courseInfo.catNumber || 'I'}`,
+        time: '90 Minutes',
+        maxMarks: '50 Marks',
+        partADesc: '4 × 2 = 8 Marks',
+        partBDesc: '3 × 6 = 18 Marks',
+        partCDesc: '2 × 12 = 24 Marks'
+      };
+    } else if (examFormat === 'SAT') {
+      return {
+        title: `Summative Assessment Test – ${courseInfo.catNumber || 'I'}`,
         time: '90 Minutes',
         maxMarks: '50 Marks',
         partADesc: '4 × 2 = 8 Marks',
@@ -251,7 +342,7 @@ function QuestionPaperCreator() {
       };
     } else {
       return {
-        title: `End Semester Examination - ${courseInfo.month} ${courseInfo.year}`,
+        title: `End Semester Theory Examinations – ${courseInfo.month} ${courseInfo.year}`,
         time: 'Three Hours',
         maxMarks: '100 Marks',
         partADesc: '5 × 2 = 10 Marks',
@@ -297,33 +388,35 @@ function QuestionPaperCreator() {
             <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
               Select Exam Format
             </h2>
-            <div className="grid grid-cols-2 gap-6 max-w-3xl mx-auto">
+            <div className="grid grid-cols-3 gap-5 max-w-4xl mx-auto">
               <button
                 onClick={() => selectExamFormat('CAT')}
-                className="bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all"
+                className="bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl p-7 shadow-lg transform hover:scale-105 transition-all"
               >
                 <div className="text-4xl mb-3">📋</div>
-                <div className="text-2xl font-bold mb-2">CAT / SAT</div>
-                <div className="text-sm opacity-90">
-                  Continuous/Summative Assessment
-                </div>
-                <div className="mt-3 text-xs opacity-75">
-                  50 Marks • 90 Minutes
-                </div>
+                <div className="text-2xl font-bold mb-2">CAT</div>
+                <div className="text-sm opacity-90">Continuous Assessment Test</div>
+                <div className="mt-3 text-xs opacity-75">50 Marks • 90 Minutes</div>
+              </button>
+
+              <button
+                onClick={() => selectExamFormat('SAT')}
+                className="bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white rounded-xl p-7 shadow-lg transform hover:scale-105 transition-all"
+              >
+                <div className="text-4xl mb-3">📝</div>
+                <div className="text-2xl font-bold mb-2">SAT</div>
+                <div className="text-sm opacity-90">Summative Assessment Test</div>
+                <div className="mt-3 text-xs opacity-75">50 Marks • 90 Minutes</div>
               </button>
               
               <button
                 onClick={() => selectExamFormat('SEM')}
-                className="bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all"
+                className="bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl p-7 shadow-lg transform hover:scale-105 transition-all"
               >
                 <div className="text-4xl mb-3">📚</div>
                 <div className="text-2xl font-bold mb-2">SEM (ESE)</div>
-                <div className="text-sm opacity-90">
-                  End Semester Examination
-                </div>
-                <div className="mt-3 text-xs opacity-75">
-                  100 Marks • 3 Hours
-                </div>
+                <div className="text-sm opacity-90">End Semester Examination</div>
+                <div className="mt-3 text-xs opacity-75">100 Marks • 3 Hours</div>
               </button>
             </div>
           </div>
@@ -359,6 +452,36 @@ function QuestionPaperCreator() {
                 />
               </div>
               <div>
+                <label className="block font-semibold mb-2">Department</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Computer Science and Engineering"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                  value={courseInfo.department}
+                  onChange={(e) => setCourseInfo({...courseInfo, department: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Degree</label>
+                <input
+                  type="text"
+                  placeholder="e.g., B.E. / B.Tech."
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                  value={courseInfo.degree}
+                  onChange={(e) => setCourseInfo({...courseInfo, degree: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Branch</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Computer Science and Engineering"
+                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                  value={courseInfo.branch}
+                  onChange={(e) => setCourseInfo({...courseInfo, branch: e.target.value})}
+                />
+              </div>
+              <div>
                 <label className="block font-semibold mb-2">Semester</label>
                 <input
                   type="number"
@@ -369,14 +492,15 @@ function QuestionPaperCreator() {
                 />
               </div>
               <div>
-                <label className="block font-semibold mb-2">Department</label>
-                <input
-                  type="text"
-                  placeholder="e.g., Computer Science"
+                <label className="block font-semibold mb-2">Regulation</label>
+                <select
                   className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
-                  value={courseInfo.department}
-                  onChange={(e) => setCourseInfo({...courseInfo, department: e.target.value})}
-                />
+                  value={courseInfo.regulation}
+                  onChange={(e) => setCourseInfo({...courseInfo, regulation: e.target.value})}
+                >
+                  <option value="R2021">R2021</option>
+                  <option value="R2023">R2023</option>
+                </select>
               </div>
               
               {(examFormat === 'CAT' || examFormat === 'SAT') && (
@@ -403,6 +527,31 @@ function QuestionPaperCreator() {
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
                       value={courseInfo.examDate}
                       onChange={(e) => setCourseInfo({...courseInfo, examDate: e.target.value})}
+                    />
+                  </div>
+                </>
+              )}
+
+              {examFormat === 'SEM' && (
+                <>
+                  <div>
+                    <label className="block font-semibold mb-2">Month</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., May"
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                      value={courseInfo.month}
+                      onChange={(e) => setCourseInfo({...courseInfo, month: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-2">Year</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., 2024"
+                      className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                      value={courseInfo.year}
+                      onChange={(e) => setCourseInfo({...courseInfo, year: e.target.value})}
                     />
                   </div>
                 </>
@@ -577,18 +726,38 @@ function QuestionPaperCreator() {
               ))}
             </div>
 
+            {submitted && (
+              <div className="mb-4 p-4 bg-green-100 border-2 border-green-400 rounded-lg text-green-800 font-semibold text-center">
+                ✅ Paper has been submitted to Scrutinizer 1 for review.
+              </div>
+            )}
+
             <div className="flex space-x-4">
               <button
                 onClick={() => setStep(2)}
-                className="px-6 py-3 bg-gray-300 hover:bg-gray-400 rounded-lg font-semibold"
+                disabled={submitting}
+                className="px-6 py-3 bg-gray-300 hover:bg-gray-400 rounded-lg font-semibold disabled:opacity-50"
               >
                 ← Back
               </button>
               <button
                 onClick={downloadPDF}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
               >
-                📥 Download Question Paper (PDF)
+                📥 Download PDF
+              </button>
+              <button
+                onClick={saveAndSubmit}
+                disabled={submitted || submitting}
+                className={`flex-1 px-6 py-3 rounded-lg font-semibold shadow-lg transition-all ${
+                  submitted
+                    ? 'bg-gray-400 cursor-not-allowed text-white'
+                    : submitting
+                    ? 'bg-indigo-400 cursor-wait text-white'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-xl'
+                }`}
+              >
+                {submitted ? '✅ Submitted to Scrutinizer 1' : submitting ? '⏳ Submitting...' : '📤 Submit to Scrutinizer'}
               </button>
             </div>
           </div>
