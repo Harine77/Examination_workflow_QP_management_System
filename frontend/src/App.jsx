@@ -16,6 +16,7 @@ import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
 import ScrutinizerFinalPaper from './pages/ScrutinizerFinalPaper';
 import HODDashboard from './pages/HODDashboard';
 import PanelDashboard from './pages/PanelDashboard';
+import PaperView from './pages/PaperView';
 
 // Root redirect component that checks auth
 function RootRedirect() {
@@ -28,6 +29,8 @@ function RootRedirect() {
   // Redirect based on role
   switch(user.role) {
     case 'scrutinizer':
+    case 'scrutinizer_1':
+    case 'scrutinizer_2':
       return <Navigate to="/scrutinizer" replace />;
     case 'hod':
       return <Navigate to="/hod-dashboard" replace />;
@@ -70,6 +73,15 @@ function App() {
             />
 
             <Route
+              path="/papers/:id"
+              element={
+                <PrivateRoute>
+                  <PaperView />
+                </PrivateRoute>
+              }
+            />
+
+            <Route
               path="/create-paper"
               element={
                 <PrivateRoute allowedRoles={['faculty']}>
@@ -82,7 +94,7 @@ function App() {
             <Route
               path="/scrutinizer"
               element={
-                <PrivateRoute allowedRoles={['scrutinizer']}>
+                <PrivateRoute allowedRoles={['scrutinizer', 'scrutinizer_1', 'scrutinizer_2']}>
                   <ScrutinizerMainDashboard />
                 </PrivateRoute>
               }
@@ -90,7 +102,7 @@ function App() {
             <Route
               path="/scrutinizer-review"
               element={
-                <PrivateRoute allowedRoles={['scrutinizer']}>
+                <PrivateRoute allowedRoles={['scrutinizer', 'scrutinizer_1', 'scrutinizer_2']}>
                   <ScrutinizerDashboard />
                 </PrivateRoute>
               }
@@ -98,7 +110,7 @@ function App() {
             <Route
               path="/scrutinizer-all-papers"
               element={
-                <PrivateRoute allowedRoles={['scrutinizer']}>
+                <PrivateRoute allowedRoles={['scrutinizer', 'scrutinizer_1', 'scrutinizer_2']}>
                   <QuestionPapers />
                 </PrivateRoute>
               }
@@ -106,7 +118,7 @@ function App() {
             <Route
               path="/scrutinizer-reviews"
               element={
-                <PrivateRoute allowedRoles={['scrutinizer']}>
+                <PrivateRoute allowedRoles={['scrutinizer', 'scrutinizer_1', 'scrutinizer_2']}>
                   <ScrutinizerDashboard />
                 </PrivateRoute>
               }

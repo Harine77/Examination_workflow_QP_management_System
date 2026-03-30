@@ -11,20 +11,29 @@ const Question = require('./models/Question');
 const User = require('./models/user');
 
 // Define User-QuestionPaper relationships
-User.hasMany(QuestionPaper, { foreignKey: 'createdBy', as: 'createdPapers' });
-User.hasMany(QuestionPaper, { foreignKey: 'reviewedBy', as: 'reviewedPapers' });
-User.hasMany(QuestionPaper, { foreignKey: 'finalizedBy', as: 'finalizedPapers' });
+User.hasMany(QuestionPaper, { foreignKey: 'createdBy',     as: 'createdPapers' });
+User.hasMany(QuestionPaper, { foreignKey: 'reviewedBy',    as: 'reviewedPapers' });
+User.hasMany(QuestionPaper, { foreignKey: 'finalizedBy',   as: 'finalizedPapers' });
+User.hasMany(QuestionPaper, { foreignKey: 'scrutinizer1Id', as: 'scr1Papers' });
+User.hasMany(QuestionPaper, { foreignKey: 'scrutinizer2Id', as: 'scr2Papers' });
+User.hasMany(QuestionPaper, { foreignKey: 'panelMemberId', as: 'panelPapers' });
+User.hasMany(QuestionPaper, { foreignKey: 'hodId',        as: 'hodPapers' });
 
-QuestionPaper.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
-QuestionPaper.belongsTo(User, { foreignKey: 'reviewedBy', as: 'reviewer' });
-QuestionPaper.belongsTo(User, { foreignKey: 'finalizedBy', as: 'finalizer' });
+QuestionPaper.belongsTo(User, { foreignKey: 'createdBy',      as: 'creator' });
+QuestionPaper.belongsTo(User, { foreignKey: 'reviewedBy',     as: 'reviewer' });
+QuestionPaper.belongsTo(User, { foreignKey: 'finalizedBy',    as: 'finalizer' });
+QuestionPaper.belongsTo(User, { foreignKey: 'scrutinizer1Id', as: 'scrutinizer1' });
+QuestionPaper.belongsTo(User, { foreignKey: 'scrutinizer2Id', as: 'scrutinizer2' });
+QuestionPaper.belongsTo(User, { foreignKey: 'panelMemberId',  as: 'panelMember' });
+QuestionPaper.belongsTo(User, { foreignKey: 'hodId',          as: 'hod' });
 
 // Routes imports
 const courseRoutes      = require('./routes/courseRoutes');
 const questionRoutes    = require('./routes/questionRoutes');
 const pdfRoutes         = require('./routes/pdfRoutes');
 const authRoutes        = require('./routes/authRoutes');
-const scrutinizerRoutes = require('./routes/ScrutinizerRoutes.js'); // ← ADDED
+const scrutinizerRoutes = require('./routes/ScrutinizerRoutes.js');
+const hodRoutes         = require('./routes/hodRoutes.js');
 
 const app = express();
 
@@ -38,7 +47,8 @@ app.use('/api/courses',     courseRoutes);
 app.use('/api/questions',   questionRoutes);
 app.use('/api/pdf',         pdfRoutes);
 app.use('/api/auth',        authRoutes);
-app.use('/api/scrutinizer', scrutinizerRoutes); // ← ADDED
+app.use('/api/scrutinizer', scrutinizerRoutes);
+app.use('/api/hod',         hodRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -57,7 +67,7 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('✅ Database connected'); 
 
-    await sequelize.sync({ force: false });
+    await sequelize.sync({ force: false, alter: true });
     console.log('✅ Database models synced');
 
     await seedSampleData();

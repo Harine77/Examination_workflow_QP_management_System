@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
+import api from '../services/api';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/scrutinizer';
 
@@ -337,6 +338,22 @@ const G = `
 }
 .sd-qno-btn.r-approved  { border-color: var(--green); color: var(--green); background: #E8F5EE; }
 .sd-qno-btn.r-suggested { border-color: var(--red);   color: var(--red);   background: #FDEEEE; }
+.sd-q-compare {
+  flex-shrink: 0;
+  width: 24px; height: 24px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--white);
+  font-size: 0.68rem;
+  color: var(--grey3);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.sd-q-compare:hover {
+  border-color: var(--yellow);
+  background: var(--yello4);
+  color: var(--black);
+}
 
 .sd-q-text { font-size: 0.8rem; color: var(--grey2); line-height: 1.5; flex:1; }
 .sd-q-icon { flex-shrink:0; font-size:0.8rem; width:16px; text-align:center; margin-top:2px; }
@@ -364,6 +381,14 @@ const G = `
   background: var(--white); color: var(--black); border-color: var(--border);
 }
 .sd-btn-compare:hover { border-color: var(--yellow); background: var(--yello4); }
+.sd-btn-danger {
+  background: #FDEEEE; color: var(--red); border-color: #F0AAAA;
+}
+.sd-btn-danger:hover { background: #FBE2E2; }
+.sd-btn-view {
+  background: #EEF4FF; color: #1D4ED8; border-color: #BFDBFE;
+}
+.sd-btn-view:hover { background: #E0ECFF; }
 
 /* ── PIPELINE VIEW ── */
 .sd-pipeline { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-bottom: 2rem; }
@@ -645,7 +670,19 @@ const G = `
 `;
 
 // ─── UTILITIES ────────────────────────────────────────────────────────────────
-const ALL_Q = ['1','2','3','4','5','6','7','8a','8b','9a','9b'];
+function qNoRank(qNo) {
+  if (!qNo) return 999;
+  const m = String(qNo).trim().toLowerCase().match(/^(\d+)([a-z]?)$/);
+  if (!m) return 999;
+  const base = parseInt(m[1], 10);
+  const suffix = m[2] || '';
+  if (!suffix) return base * 10;
+  return base * 10 + (suffix.charCodeAt(0) - 96);
+}
+
+function sortQuestionNos(list) {
+  return [...new Set(list)].sort((a, b) => qNoRank(a) - qNoRank(b));
+}
 
 const statusMeta = {
   PENDING:        { label:'Pending',        cls:'status-pending',       accent:'accent-pending' },
@@ -667,15 +704,15 @@ function useToast() {
 
 // ─── COMPONENTS ───────────────────────────────────────────────────────────────
 
-function QuestionRow({ q, revMap, onCompare }) {
+function QuestionRow({ q, revMap, onOpenQuestion, onCompare }) {
   const rev = revMap[`${q.paper_title}||${q.question_no}`];
   const rCls = rev?.status === 'APPROVED' ? 'r-approved' : rev?.status === 'SUGGESTED' ? 'r-suggested' : '';
   return (
     <div className="sd-q-row">
       <button
         className={`sd-qno-btn ${rCls}`}
-        onClick={() => onCompare(q.question_no)}
-        title="Compare across all papers"
+        onClick={() => onOpenQuestion(q)}
+        title="Open question review window"
       >
         {q.question_no}
       </button>
@@ -684,32 +721,78 @@ function QuestionRow({ q, revMap, onCompare }) {
         {rev?.status === 'APPROVED'  && <span style={{color:'var(--green)',fontWeight:700}}>✓</span>}
         {rev?.status === 'SUGGESTED' && <span style={{color:'var(--red)'}}>!</span>}
       </div>
+      <button className="sd-q-compare" title="Compare this question across papers" onClick={() => onCompare(q.question_no)}>
+        ⇄
+      </button>
     </div>
   );
 }
 
-function PaperCard({ paper, revMap, onCompare, onBulkApprove, onDrag }) {
+function PaperCard({
+  paper,
+  revMap,
+  onCompare,
+  onDrag,
+  onOpenQuestion,
+  onOpenPaperReview,
+  userRole,
+  onPassToS2,
+  onWorkflowApprove,
+  onWorkflowReject,
+  onSendToPanel,
+}) {
   const prog = paper.progress || { total:0,approved:0,suggested:0,reviewed:0 };
   const pct  = prog.total ? Math.round((prog.reviewed/prog.total)*100) : 0;
   const sm   = statusMeta[paper.status] || statusMeta.PENDING;
+  const workflowStatus = paper.workflow_status;
   const [dragOver, setDragOver] = useState(false);
+  const suppressClickRef = useRef(false);
+
+  const handleCardClick = (e) => {
+    if (suppressClickRef.current) return;
+    const isInteractive = e.target.closest('button, textarea, input, select, a');
+    if (isInteractive) return;
+    onOpenPaperReview(paper.paper_title);
+  };
 
   return (
     <div
       className={`sd-card ${dragOver ? 'drag-over' : ''}`}
       draggable
-      onDragStart={e => onDrag.start(e, paper.paper_title)}
+      onClick={handleCardClick}
+      onDragStart={e => {
+        suppressClickRef.current = true;
+        onDrag.start(e, paper.paper_title);
+      }}
       onDragOver={e => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={e => { setDragOver(false); onDrag.drop(e, paper.paper_title); }}
+      onDrop={e => {
+        setDragOver(false);
+        suppressClickRef.current = true;
+        onDrag.drop(e, paper.paper_title);
+        setTimeout(() => { suppressClickRef.current = false; }, 120);
+      }}
+      onDragEnd={() => {
+        setTimeout(() => { suppressClickRef.current = false; }, 120);
+      }}
     >
       <div className={`sd-card-accent ${sm.accent}`} />
 
       <div className="sd-card-head">
         <div>
-          <div className="sd-card-title">{paper.paper_title}</div>
+          <button
+            className="sd-card-title"
+            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}
+            onClick={() => onOpenPaperReview(paper.paper_title)}
+            title="Open full paper review window"
+          >
+            {paper.paper_title}
+          </button>
           <div className="sd-card-sub">
             {prog.total} questions · {prog.approved} approved · {prog.suggested} flagged
+          </div>
+          <div className="sd-card-sub" style={{ marginTop: '0.15rem' }}>
+            Workflow: <strong>{workflowStatus || 'unknown'}</strong>
           </div>
         </div>
         <span className={`sd-status ${sm.cls}`}>{sm.label}</span>
@@ -738,32 +821,89 @@ function PaperCard({ paper, revMap, onCompare, onBulkApprove, onDrag }) {
                 {sec==='2M'?'2-Mark Questions':sec==='6M'?'6-Mark Questions':'12-Mark Either / Or'}
               </div>
               {qs.map(q => (
-                <QuestionRow key={q.id} q={q} revMap={revMap} onCompare={onCompare} />
+                <QuestionRow
+                  key={q.id}
+                  q={q}
+                  revMap={revMap}
+                  onCompare={onCompare}
+                  onOpenQuestion={onOpenQuestion}
+                />
               ))}
             </div>
           );
         })}
       </div>
 
-      <div className="sd-card-footer">
-        <button className="sd-btn sd-btn-approve" onClick={() => onBulkApprove(paper.paper_title)}>
-          ✓ Approve All
+      <div className="sd-card-footer" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+        <button className="sd-btn sd-btn-view" onClick={() => onOpenPaperReview(paper.paper_title)}>
+          Review Window
         </button>
-        <button className="sd-btn sd-btn-compare" onClick={() => onCompare('1')}>
-          ⇄ Compare View
-        </button>
+        
+        {/* Scrutinizer 1 Actions */}
+        {['scrutinizer', 'scrutinizer_1'].includes(userRole) && workflowStatus === 'with_scrutinizer1' && (
+          <button 
+            className="sd-btn" 
+            style={{ background: '#1B7A3E', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.9rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+            onClick={() => onPassToS2(paper.paper_id)}
+          >
+            → Pass to S2
+          </button>
+        )}
+
+        {/* Scrutinizer 2 Actions */}
+        {['scrutinizer', 'scrutinizer_2'].includes(userRole) && workflowStatus === 'with_scrutinizer2' && (
+          <>
+            <button 
+              className="sd-btn" 
+              style={{ background: '#1B7A3E', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.9rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+              onClick={() => onWorkflowApprove(paper.paper_id)}
+            >
+              ✓ Approve
+            </button>
+            <button 
+              className="sd-btn" 
+              style={{ background: '#C0392B', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.9rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+              onClick={() => onWorkflowReject(paper.paper_id)}
+            >
+              ↩ Send to Faculty
+            </button>
+          </>
+        )}
+
+        {/* Send to Panel (for randomized papers) */}
+        {['scrutinizer', 'scrutinizer_2'].includes(userRole) && workflowStatus === 'randomized' && (
+          <button 
+            className="sd-btn" 
+            style={{ background: '#0066CC', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.9rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+            onClick={() => onSendToPanel(paper.paper_id)}
+          >
+            → Send to Panel
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 function CompareModal({ papers, revMap, onClose, onSave, initQ }) {
-  const [curQ, setCurQ]         = useState(initQ || '1');
+  const questionNos = sortQuestionNos(
+    papers.flatMap(p => Object.values(p.sections || {}).flat().map(q => q.question_no))
+  );
+  const [curQ, setCurQ] = useState(() => {
+    if (initQ && questionNos.includes(initQ)) return initQ;
+    return questionNos[0] || '';
+  });
   const [sug, setSug]           = useState({});
   const [showTA, setShowTA]     = useState({});
   const [saving, setSaving]     = useState({});
 
-  const qIdx = ALL_Q.indexOf(curQ);
+  useEffect(() => {
+    if (!questionNos.includes(curQ)) {
+      setCurQ(questionNos[0] || '');
+    }
+  }, [questionNos, curQ]);
+
+  const qIdx = questionNos.indexOf(curQ);
 
   const getRev = (pt, qno) => revMap[`${pt}||${qno}`];
 
@@ -804,14 +944,14 @@ function CompareModal({ papers, revMap, onClose, onSave, initQ }) {
         <div className="sd-modal-body">
           {/* Navigation */}
           <div className="sd-qnav">
-            <button className="sd-qnav-arrow" disabled={qIdx<=0} onClick={()=>setCurQ(ALL_Q[qIdx-1])}>← Prev</button>
-            <div className="sd-qnav-center">Q{curQ} &nbsp;·&nbsp; {qIdx+1} of {ALL_Q.length}</div>
-            <button className="sd-qnav-arrow" disabled={qIdx>=ALL_Q.length-1} onClick={()=>setCurQ(ALL_Q[qIdx+1])}>Next →</button>
+            <button className="sd-qnav-arrow" disabled={qIdx<=0} onClick={()=>setCurQ(questionNos[qIdx-1])}>← Prev</button>
+            <div className="sd-qnav-center">Q{curQ} &nbsp;·&nbsp; {qIdx+1} of {questionNos.length}</div>
+            <button className="sd-qnav-arrow" disabled={qIdx>=questionNos.length-1} onClick={()=>setCurQ(questionNos[qIdx+1])}>Next →</button>
           </div>
 
           {/* Pills */}
           <div className="sd-qno-pills">
-            {ALL_Q.map(qno => {
+            {questionNos.map(qno => {
               const allDone    = papers.every(p => !!getRev(p.paper_title, qno));
               const hasFlagged = papers.some(p => getRev(p.paper_title, qno)?.status === 'SUGGESTED');
               return (
@@ -913,6 +1053,173 @@ function CompareModal({ papers, revMap, onClose, onSave, initQ }) {
   );
 }
 
+function PaperReviewWindow({
+  paper,
+  revMap,
+  initialQ,
+  onClose,
+  onSave,
+  onApproveRemaining,
+  onApproveAll,
+  onOpenCompare,
+  onViewPaper,
+  onPassToS2,
+  onSendToPanel,
+  onWorkflowApprove,
+  onWorkflowReject,
+  currentRole,
+}) {
+  const allQuestions = Object.values(paper.sections || {})
+    .flat()
+    .sort((a, b) => qNoRank(a.question_no) - qNoRank(b.question_no));
+  const compareQNo = initialQ || allQuestions[0]?.question_no || '';
+  const workflowStatus = paper.workflow_status;
+  const isS1Role = ['scrutinizer', 'scrutinizer_1'].includes(currentRole);
+  const isS2Role = ['scrutinizer', 'scrutinizer_2'].includes(currentRole);
+  const canS1Act = isS1Role && workflowStatus === 'with_scrutinizer1';
+  const canS2Act = isS2Role && workflowStatus === 'with_scrutinizer2';
+  const canSendToPanel = isS2Role && workflowStatus === 'randomized';
+
+  const [draftMap, setDraftMap] = useState({});
+  const [savingKey, setSavingKey] = useState('');
+
+  useEffect(() => {
+    const next = {};
+    Object.values(paper.sections || {}).flat().forEach(q => {
+      const r = revMap[`${paper.paper_title}||${q.question_no}`];
+      next[q.question_no] = r?.suggestion_text || '';
+    });
+    setDraftMap(next);
+  }, [paper.paper_title, revMap]);
+
+  const approveOne = async (qNo) => {
+    setSavingKey(`approve:${qNo}`);
+    await onSave(paper.paper_title, qNo, 'APPROVED', null);
+    setSavingKey('');
+  };
+
+  const suggestOne = async (qNo) => {
+    const txt = (draftMap[qNo] || '').trim();
+    if (!txt) return;
+    setSavingKey(`suggest:${qNo}`);
+    await onSave(paper.paper_title, qNo, 'SUGGESTED', txt);
+    setSavingKey('');
+  };
+
+  return (
+    <div className="sd-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="sd-modal" style={{ maxWidth: 1080 }}>
+        <div className="sd-modal-top">
+          <div>
+            <div className="sd-modal-title">Paper <span>Review</span> Window</div>
+            <div className="sd-modal-sub">
+              {paper.paper_title} · {allQuestions.length} questions · Review each question and finalize using buttons below
+            </div>
+          </div>
+          <button className="sd-modal-x" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="sd-modal-body">
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+            <button className="sd-mini-btn btn-approve" style={{ maxWidth: 260 }} onClick={() => onApproveAll(paper.paper_title)}>
+              Approve All
+            </button>
+            <button className="sd-mini-btn btn-revise" style={{ maxWidth: 320 }} onClick={() => onApproveRemaining(paper.paper_title)}>
+              Approve Remaining
+            </button>
+          </div>
+
+          <div className="sd-table-wrap">
+            <table className="sd-table">
+              <thead>
+                <tr>
+                  <th>Q.No</th>
+                  <th>Question</th>
+                  <th>Status</th>
+                  <th>Suggestion / Comment</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allQuestions.map(q => {
+                  const r = revMap[`${paper.paper_title}||${q.question_no}`];
+                  const isSavingApprove = savingKey === `approve:${q.question_no}`;
+                  const isSavingSuggest = savingKey === `suggest:${q.question_no}`;
+                  const highlight = initialQ && q.question_no === initialQ;
+                  return (
+                    <tr key={q.question_no} style={highlight ? { background: '#FFFBEA' } : undefined}>
+                      <td className="sd-mono">{q.question_no}</td>
+                      <td>{q.question}</td>
+                      <td>
+                        {!r && <span className="sd-status status-pending">Pending</span>}
+                        {r?.status === 'APPROVED' && <span className="sd-status status-approved">Approved</span>}
+                        {r?.status === 'SUGGESTED' && <span className="sd-status status-needs_revision">Suggested</span>}
+                      </td>
+                      <td>
+                        <textarea
+                          className="sd-textarea"
+                          placeholder="Write suggestion/comment..."
+                          value={draftMap[q.question_no] || ''}
+                          onChange={e => setDraftMap(prev => ({ ...prev, [q.question_no]: e.target.value }))}
+                          style={{ minHeight: 56 }}
+                        />
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.45rem' }}>
+                          <button className="sd-mini-btn btn-approve" disabled={isSavingApprove || isSavingSuggest} onClick={() => approveOne(q.question_no)}>
+                            {isSavingApprove ? '…' : 'Approve'}
+                          </button>
+                          <button className="sd-mini-btn btn-suggest" disabled={isSavingApprove || isSavingSuggest || !(draftMap[q.question_no] || '').trim()} onClick={() => suggestOne(q.question_no)}>
+                            {isSavingSuggest ? '…' : 'Suggest'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button className="sd-mini-btn btn-revise" style={{ minWidth: 170 }} onClick={() => onApproveRemaining(paper.paper_title)}>
+                Approve Remaining
+              </button>
+              <button className="sd-mini-btn btn-revise" style={{ minWidth: 160 }} onClick={() => onOpenCompare(compareQNo)}>
+                Compare View
+              </button>
+              {canS1Act && (
+                <button className="sd-mini-btn btn-approve" style={{ minWidth: 130 }} onClick={() => onPassToS2(paper.paper_id)}>
+                  Pass to S2
+                </button>
+              )}
+              {canS2Act && (
+                <button className="sd-mini-btn btn-approve" style={{ minWidth: 140 }} onClick={() => onWorkflowApprove(paper.paper_id)}>
+                  S2 Approve
+                </button>
+              )}
+              {canS2Act && (
+                <button className="sd-mini-btn btn-suggest" style={{ minWidth: 140 }} onClick={() => onWorkflowReject(paper.paper_id)}>
+                  Send Back to Faculty
+                </button>
+              )}
+              {canSendToPanel && (
+                <button className="sd-mini-btn btn-approve" style={{ minWidth: 150 }} onClick={() => onSendToPanel(paper.paper_id)}>
+                  Send to Panel
+                </button>
+              )}
+            </div>
+            <button className="sd-mini-btn btn-revise" style={{ minWidth: 130 }} onClick={() => onViewPaper(paper.paper_id)}>
+              View Paper
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PipelineView({ papers }) {
   const approved   = papers.filter(p => p.status === 'APPROVED');
   const unapproved = papers.filter(p => p.status === 'NEEDS_REVISION');
@@ -989,9 +1296,11 @@ function PipelineView({ papers }) {
 function ScrutinizerDashboard() {
   const [papers,  setPapers]  = useState([]);
   const [revMap,  setRevMap]  = useState({});       // "paper||qno" → review obj
+  const [approvedGroups, setApprovedGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab,     setTab]     = useState('papers'); // 'papers' | 'pipeline'
   const [modal,   setModal]   = useState(null);     // { initQ }
+  const [paperWindow, setPaperWindow] = useState(null); // { paperTitle, questionNo }
   const [order,   setOrder]   = useState([]);
   const { toasts, push }      = useToast();
   const dragRef = useRef(null);
@@ -1000,9 +1309,10 @@ function ScrutinizerDashboard() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [pRes, rRes] = await Promise.all([
-        fetch(`${API}/papers`).then(r=>r.json()).catch(()=>null),
-        fetch(`${API}/reviews`).then(r=>r.json()).catch(()=>null),
+      const [pRes, rRes, aRes] = await Promise.all([
+        api.get('/scrutinizer/papers').then(r => r.data).catch(() => null),
+        api.get('/scrutinizer/reviews').then(r => r.data).catch(() => null),
+        api.get('/scrutinizer/approved-papers').then(r => r.data).catch(() => null),
       ]);
 
       if (pRes?.success) {
@@ -1028,25 +1338,13 @@ function ScrutinizerDashboard() {
           }
         }
         setRevMap(rm);
+        setApprovedGroups(aRes?.success ? (aRes.groups || []) : []);
       } else {
-        // Demo mode
-        setPapers(MOCK);
-        setOrder(MOCK.map(p => p.paper_title));
-        const rm = {};
-        for (const paper of MOCK) {
-          for (const qs of Object.values(paper.sections)) {
-            for (const q of qs) {
-              if (q.review_status) {
-                rm[`${q.paper_title}||${q.question_no}`] = {
-                  status: q.review_status,
-                  suggestion_text: q.review_suggestion || null,
-                };
-              }
-            }
-          }
-        }
-        setRevMap(rm);
-        push('Demo mode — connect backend for live data', true);
+        setPapers([]);
+        setOrder([]);
+        setRevMap({});
+        setApprovedGroups([]);
+        push('No papers found in your review queue yet', false);
       }
     } finally {
       setLoading(false);
@@ -1074,12 +1372,8 @@ function ScrutinizerDashboard() {
     }));
 
     try {
-      await fetch(`${API}/review`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ paper_title:paperTitle, question_no:questionNo, status, suggestion_text:suggestionText }),
-      });
-    } catch { /* demo */ }
+      await api.post('/scrutinizer/review', { paper_title: paperTitle, question_no: questionNo, status, suggestion_text: suggestionText });
+    } catch { /* ignore */ }
 
     push(status==='APPROVED' ? `Q${questionNo} approved` : `Suggestion saved for Q${questionNo}`);
   }, [revMap, push]);
@@ -1089,20 +1383,59 @@ function ScrutinizerDashboard() {
     const paper = papers.find(p => p.paper_title === paperTitle);
     if (!paper) return;
     const allQs = Object.values(paper.sections).flat();
+    const unanswered = allQs.filter(q => !revMap[`${q.paper_title}||${q.question_no}`]);
+
+    if (unanswered.length === 0) {
+      push(`No remaining questions to approve in ${paperTitle}`);
+      return;
+    }
+
+    const newRM = { ...revMap };
+    unanswered.forEach(q => { newRM[`${q.paper_title}||${q.question_no}`] = { status:'APPROVED', suggestion_text:null }; });
+    setRevMap(newRM);
+
+    setPapers(prev => prev.map(p => {
+      if (p.paper_title !== paperTitle) return p;
+      const total = p.progress?.total || 0;
+      const reviewed = allQs.filter(q => newRM[`${q.paper_title}||${q.question_no}`]).length;
+      const approved = allQs.filter(q => newRM[`${q.paper_title}||${q.question_no}`]?.status === 'APPROVED').length;
+      const suggested = allQs.filter(q => newRM[`${q.paper_title}||${q.question_no}`]?.status === 'SUGGESTED').length;
+      const status = approved===total ? 'APPROVED' : suggested>0 ? 'NEEDS_REVISION' : reviewed>0 ? 'IN_PROGRESS' : 'PENDING';
+      return { ...p, status, progress: { ...p.progress, reviewed, approved, suggested } };
+    }));
+
+    try {
+      await Promise.all(
+        unanswered.map(q => api.post('/scrutinizer/review', {
+          paper_title: paperTitle,
+          question_no: q.question_no,
+          status: 'APPROVED',
+          suggestion_text: null,
+        }))
+      );
+    } catch { /* ignore */ }
+    push(`${unanswered.length} remaining question(s) approved in ${paperTitle}`);
+  }, [papers, revMap, push]);
+
+  const handleApproveAll = useCallback(async (paperTitle) => {
+    const paper = papers.find(p => p.paper_title === paperTitle);
+    if (!paper) return;
+    const allQs = Object.values(paper.sections).flat();
+
     const newRM = { ...revMap };
     allQs.forEach(q => { newRM[`${q.paper_title}||${q.question_no}`] = { status:'APPROVED', suggestion_text:null }; });
     setRevMap(newRM);
-    setPapers(prev => prev.map(p => p.paper_title===paperTitle
-      ? { ...p, status:'APPROVED', progress:{...p.progress, reviewed:p.progress.total, approved:p.progress.total, suggested:0} }
-      : p
-    ));
+
+    setPapers(prev => prev.map(p => {
+      if (p.paper_title !== paperTitle) return p;
+      const total = p.progress?.total || 0;
+      return { ...p, status: 'APPROVED', progress: { ...p.progress, reviewed: total, approved: total, suggested: 0 } };
+    }));
+
     try {
-      await fetch(`${API}/review/bulk`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ paper_title:paperTitle, status:'APPROVED' }),
-      });
-    } catch { /* demo */ }
-    push(`All questions in ${paperTitle} approved`);
+      await api.post('/scrutinizer/review/bulk', { paper_title: paperTitle, status: 'APPROVED' });
+    } catch { /* ignore */ }
+    push(`All questions approved in ${paperTitle}`);
   }, [papers, revMap, push]);
 
   // ── Sync all in-memory reviews → DB ───────────────────────────────────────
@@ -1122,18 +1455,13 @@ function ScrutinizerDashboard() {
     for (const [key, rev] of entries) {
       const [paper_title, question_no] = key.split('||');
       try {
-        const res = await fetch(`${API}/review`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            paper_title,
-            question_no,
-            status: rev.status,
-            suggestion_text: rev.suggestion_text || null,
-          }),
+        const response = await api.post('/scrutinizer/review', {
+          paper_title,
+          question_no,
+          status: rev.status,
+          suggestion_text: rev.suggestion_text || null,
         });
-        const data = await res.json();
-        if (data.success) done++; else failed++;
+        if (response.data.success) done++; else failed++;
       } catch { failed++; }
       setSyncResult({ ok: null, done, total: entries.length });
     }
@@ -1179,8 +1507,59 @@ function ScrutinizerDashboard() {
   const flaggedP  = papers.filter(p => p.status==='NEEDS_REVISION').length;
 
   const navigate = useNavigate();
-  const { logout } = useAuth();
-  
+  const { logout, user } = useAuth();
+
+  const handlePassToS2 = useCallback(async (paperId) => {
+    const comments = window.prompt('Optional: Add comments for Scrutinizer 2 (leave blank to skip)') || '';
+    try {
+      await api.post(`/scrutinizer/papers/${paperId}/pass-to-s2`, { comments });
+      push('Paper forwarded to Scrutinizer 2');
+      setTimeout(() => fetchAll(), 800);
+    } catch { push('Failed to pass paper to Scrutinizer 2', true); }
+  }, [fetchAll, push]);
+
+  const handleWorkflowApprove = useCallback(async (paperId) => {
+    try {
+      await api.post(`/scrutinizer/papers/${paperId}/approve`);
+      push('Paper approved successfully');
+      setTimeout(() => fetchAll(), 800);
+    } catch { push('Failed to approve paper', true); }
+  }, [fetchAll, push]);
+
+  const handleWorkflowReject = useCallback(async (paperId) => {
+    const comments = window.prompt('Required: Why is this paper being sent back? (Visible to faculty)');
+    if (!comments?.trim()) { push('A comment is required to send back a paper', true); return; }
+    try {
+      await api.post(`/scrutinizer/papers/${paperId}/reject`, { comments });
+      push('Paper sent back to faculty for revision');
+      setTimeout(() => fetchAll(), 800);
+    } catch { push('Failed to reject paper', true); }
+  }, [fetchAll, push]);
+
+  const handleViewPaper = useCallback((paperId) => {
+    navigate(`/papers/${paperId}`);
+  }, [navigate]);
+
+  const handleRandomizeCourse = useCallback(async (courseId) => {
+    try {
+      const { data } = await api.post(`/scrutinizer/randomize/${courseId}`);
+      push(`Randomized final paper created (ID: ${data.finalPaperId})`);
+      setTimeout(() => fetchAll(), 800);
+    } catch (err) {
+      push(err.response?.data?.error || 'Failed to randomize papers for this course', true);
+    }
+  }, [fetchAll, push]);
+
+  const handleSendToPanel = useCallback(async (paperId) => {
+    try {
+      await api.post(`/scrutinizer/papers/${paperId}/send-to-panel`);
+      push('Final paper sent to panel successfully');
+      setTimeout(() => fetchAll(), 800);
+    } catch (err) {
+      push(err.response?.data?.error || 'Failed to send paper to panel', true);
+    }
+  }, [fetchAll, push]);
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -1275,8 +1654,34 @@ function ScrutinizerDashboard() {
             </div>
           ) : tab === 'papers' ? (
             <>
+              {['scrutinizer', 'scrutinizer_2'].includes(user?.role) && approvedGroups.length > 0 && (
+                <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ padding: '0.8rem 1rem', background: '#EEF4FF', fontSize: '0.73rem', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700, color: '#1E3A8A' }}>
+                    Course Randomization Queue (S2)
+                  </div>
+                  <div style={{ padding: '1rem' }}>
+                    {approvedGroups.map(g => (
+                      <div key={g.courseId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.7rem 0', borderBottom: '1px solid #E5E7EB' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#111827' }}>{g.courseCode} - {g.courseName}</div>
+                          <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>{g.count} S2-approved papers</div>
+                        </div>
+                        <button
+                          onClick={() => handleRandomizeCourse(g.courseId)}
+                          disabled={!g.readyForRandomization}
+                          className="sd-btn sd-btn-approve"
+                          style={{ maxWidth: 220, opacity: g.readyForRandomization ? 1 : 0.5 }}
+                        >
+                          🎲 Randomize Final Paper
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="sd-section-label">
-                Question Papers — click any question number to compare · drag to reorder
+                Question Papers — click question number to open review window · use ⇄ to compare across papers
               </div>
               <div className="sd-grid">
                 {orderedPapers.map(paper => (
@@ -1285,8 +1690,14 @@ function ScrutinizerDashboard() {
                     paper={paper}
                     revMap={revMap}
                     onCompare={qno => setModal({ initQ: qno })}
-                    onBulkApprove={handleBulkApprove}
                     onDrag={drag}
+                    onOpenQuestion={(q) => setPaperWindow({ paperTitle: paper.paper_title, questionNo: q.question_no })}
+                    onOpenPaperReview={(paperTitle) => setPaperWindow({ paperTitle, questionNo: null })}
+                    userRole={user?.role}
+                    onPassToS2={handlePassToS2}
+                    onWorkflowApprove={handleWorkflowApprove}
+                    onWorkflowReject={handleWorkflowReject}
+                    onSendToPanel={handleSendToPanel}
                   />
                 ))}
               </div>
@@ -1390,6 +1801,30 @@ function ScrutinizerDashboard() {
             onSave={handleSave}
           />
         )}
+
+        {/* PAPER REVIEW WINDOW */}
+        {paperWindow && (() => {
+          const selectedPaper = papers.find(p => p.paper_title === paperWindow.paperTitle);
+          if (!selectedPaper) return null;
+          return (
+            <PaperReviewWindow
+              paper={selectedPaper}
+              revMap={revMap}
+              initialQ={paperWindow.questionNo}
+              onClose={() => setPaperWindow(null)}
+              onSave={handleSave}
+              onApproveRemaining={handleBulkApprove}
+              onApproveAll={handleApproveAll}
+              onOpenCompare={(qNo) => setModal({ initQ: qNo })}
+              onViewPaper={handleViewPaper}
+              onPassToS2={handlePassToS2}
+              onSendToPanel={handleSendToPanel}
+              onWorkflowApprove={handleWorkflowApprove}
+              onWorkflowReject={handleWorkflowReject}
+              currentRole={user?.role}
+            />
+          );
+        })()}
 
         {/* TOASTS */}
         <div className="sd-toasts">
