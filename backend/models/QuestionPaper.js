@@ -36,6 +36,13 @@ const QuestionPaper = sequelize.define('QuestionPaper', {
     defaultValue: 'draft'
   },
 
+  // Marks this paper as the shuffled/final paper created by the randomize process
+  isShuffled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+
   // ── Ownership / stage-tracking FKs ─────────────────────────────────────
   createdBy: {
     type: DataTypes.INTEGER,

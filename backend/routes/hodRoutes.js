@@ -162,20 +162,42 @@ router.post('/papers/:id/reject', requireHod, async (req, res) => {
 });
 
 // ── GET /api/panel/papers ──────────────────────────────────────────────────
-// Panel Members see papers ready for panel review (status = 'with_panel')
+// Panel Members see only the final papers:
+//   - Shuffled papers (isShuffled = true) when multiple QPs existed for a course
+//   - Single papers (isShuffled = false) when only one QP existed for a course
+//     i.e. for each course, if a shuffled paper exists show only that,
+//     otherwise show the single with_panel paper.
 router.get('/panel/papers', requirePanelMember, async (req, res) => {
   try {
-    const papers = await QuestionPaper.findAll({
+    const allPanelPapers = await QuestionPaper.findAll({
       where: { status: 'with_panel' },
       include: [
         { model: Course, attributes: ['id', 'courseCode', 'courseName'] },
         { model: User, as: 'creator', attributes: ['id', 'username', 'email'] },
         { model: Question }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
     });
 
-    const papersData = papers.map(paper => ({
+    // For each course: if a shuffled paper exists → show only that.
+    // If no shuffled paper → show the single paper.
+    const courseMap = {};
+    for (const p of allPanelPapers) {
+      const cid = p.CourseId;
+      if (!courseMap[cid]) {
+        courseMap[cid] = { shuffled: null, single: null };
+      }
+      if (p.isShuffled) {
+        courseMap[cid].shuffled = p;
+      } else {
+        // keep the most recent single paper per course
+        if (!courseMap[cid].single) courseMap[cid].single = p;
+      }
+    }
+
+    const finalPapers = Object.values(courseMap).map(g => g.shuffled || g.single).filter(Boolean);
+
+    const papersData = finalPapers.map(paper => ({
       id: paper.id,
       courseCode: paper.Course?.courseCode || '?',
       courseName: paper.Course?.courseName || 'Unknown',
@@ -183,6 +205,7 @@ router.get('/panel/papers', requirePanelMember, async (req, res) => {
       catNumber: paper.catNumber,
       examDate: paper.examDate,
       createdBy: paper.creator?.username || 'Unknown',
+      isShuffled: paper.isShuffled,
       sections: buildQuestionSections(paper.Questions || []),
       status: paper.status,
       scrutinizer2Comments: paper.scrutinizer2Comments || null,

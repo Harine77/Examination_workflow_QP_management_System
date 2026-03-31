@@ -10,7 +10,7 @@ const { protect, canCreate, canEdit, canFinalize } = require('../middleware/auth
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'exam_workflow',
+  database: process.env.DB_NAME || 'exam',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || process.env.DB_PASS || 'password',
 });
@@ -95,9 +95,25 @@ router.get('/papers', async (req, res) => {
     const { Op } = require('sequelize');
     
     let whereClause = {};
-    
-    // Explicit status filter from query param takes precedence
-    if (status) {
+
+    // For panel_member: always apply the smart per-course filter regardless of ?status param
+    if (req.user.role === 'panel_member') {
+      const allPanel = await QuestionPaper.findAll({
+        where: { status: 'with_panel' },
+        attributes: ['id', 'CourseId', 'isShuffled', 'createdAt'],
+        order: [['createdAt', 'DESC']],
+      });
+      const courseMap = {};
+      for (const p of allPanel) {
+        const cid = p.CourseId;
+        if (!courseMap[cid]) courseMap[cid] = { shuffledId: null, singleId: null };
+        if (p.isShuffled && !courseMap[cid].shuffledId) courseMap[cid].shuffledId = p.id;
+        else if (!p.isShuffled && !courseMap[cid].singleId) courseMap[cid].singleId = p.id;
+      }
+      const finalIds = Object.values(courseMap).map(g => g.shuffledId || g.singleId).filter(Boolean);
+      whereClause = { id: { [Op.in]: finalIds.length ? finalIds : [0] } };
+    } else if (status) {
+      // Explicit status filter from query param (non-panel roles)
       whereClause.status = status;
     } else {
       // Default: show only the papers relevant to each role
@@ -113,7 +129,7 @@ router.get('/papers', async (req, res) => {
           whereClause.status = { [Op.in]: ['with_scrutinizer2', 'scrutinizer2_approved'] };
           break;
         case 'panel_member':
-          whereClause.status = { [Op.in]: ['with_panel', 'randomized'] };
+          // handled above before the switch
           break;
         case 'hod':
           whereClause.status = { [Op.in]: ['with_hod', 'hod_approved'] };
@@ -179,6 +195,7 @@ router.get('/papers/:id', async (req, res) => {
   try {
     const User = require('../models/user');
     const Course = require('../models/Course');
+    const CourseOutcome = require('../models/CourseOutcome');
     
     const paper = await QuestionPaper.findByPk(req.params.id, {
       include: [
@@ -202,7 +219,8 @@ router.get('/papers/:id', async (req, res) => {
           attributes: ['id', 'username', 'email', 'role']
         },
         {
-          model: Question
+          model: Question,
+          include: [{ model: CourseOutcome, attributes: ['id', 'coNumber'] }]
         }
       ]
     });

@@ -116,59 +116,16 @@ const QuestionPapers = () => {
           </p>
         </div>
 
-        {/* Filter Buttons */}
+        {/* Filter Buttons — hidden for panel members */}
+        {user.role !== 'panel_member' && (
         <div className="flex space-x-3 mb-6">
-          <button
-            onClick={() => navigate('/papers')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              !statusFilter 
-                ? 'bg-indigo-600 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            All Papers
-          </button>
-          <button
-            onClick={() => navigate('/papers?status=draft')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              statusFilter === 'draft' 
-                ? 'bg-indigo-600 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Draft
-          </button>
-          <button
-            onClick={() => navigate('/papers?status=submitted')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              statusFilter === 'submitted' 
-                ? 'bg-indigo-600 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Submitted
-          </button>
-          <button
-            onClick={() => navigate('/papers?status=reviewed')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              statusFilter === 'reviewed' 
-                ? 'bg-indigo-600 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Reviewed
-          </button>
-          <button
-            onClick={() => navigate('/papers?status=finalized')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-              statusFilter === 'finalized' 
-                ? 'bg-indigo-600 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Finalized
-          </button>
+          <button onClick={() => navigate('/papers')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${!statusFilter ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>All Papers</button>
+          <button onClick={() => navigate('/papers?status=draft')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'draft' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Draft</button>
+          <button onClick={() => navigate('/papers?status=submitted')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'submitted' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Submitted</button>
+          <button onClick={() => navigate('/papers?status=reviewed')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'reviewed' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Reviewed</button>
+          <button onClick={() => navigate('/papers?status=finalized')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'finalized' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Finalized</button>
         </div>
+        )}
 
         {/* Papers List */}
         {loading ? (
