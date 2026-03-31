@@ -98,20 +98,55 @@ router.get('/papers', async (req, res) => {
 
     // For panel_member: always apply the smart per-course filter regardless of ?status param
     if (req.user.role === 'panel_member') {
-      const allPanel = await QuestionPaper.findAll({
-        where: { status: 'with_panel' },
-        attributes: ['id', 'CourseId', 'isShuffled', 'createdAt'],
-        order: [['createdAt', 'DESC']],
-      });
-      const courseMap = {};
-      for (const p of allPanel) {
-        const cid = p.CourseId;
-        if (!courseMap[cid]) courseMap[cid] = { shuffledId: null, singleId: null };
-        if (p.isShuffled && !courseMap[cid].shuffledId) courseMap[cid].shuffledId = p.id;
-        else if (!p.isShuffled && !courseMap[cid].singleId) courseMap[cid].singleId = p.id;
+      if (status) {
+        // Explicit status filter — show all papers at that status assigned to this panel member
+        whereClause = {
+          [Op.or]: [
+            { status, panelMemberId: req.user.id },
+            { status: 'with_panel' }
+          ]
+        };
+        // For with_panel, apply the smart per-course filter
+        if (status === 'with_panel') {
+          const allPanel = await QuestionPaper.findAll({
+            where: { status: 'with_panel' },
+            attributes: ['id', 'CourseId', 'isShuffled', 'createdAt'],
+            order: [['createdAt', 'DESC']],
+          });
+          const courseMap = {};
+          for (const p of allPanel) {
+            const cid = p.CourseId;
+            if (!courseMap[cid]) courseMap[cid] = { shuffledId: null, singleId: null };
+            if (p.isShuffled && !courseMap[cid].shuffledId) courseMap[cid].shuffledId = p.id;
+            else if (!p.isShuffled && !courseMap[cid].singleId) courseMap[cid].singleId = p.id;
+          }
+          const finalIds = Object.values(courseMap).map(g => g.shuffledId || g.singleId).filter(Boolean);
+          whereClause = { id: { [Op.in]: finalIds.length ? finalIds : [0] } };
+        }
+      } else {
+        // No filter — show with_panel (smart) + all papers they submitted
+        const allPanel = await QuestionPaper.findAll({
+          where: { status: 'with_panel' },
+          attributes: ['id', 'CourseId', 'isShuffled', 'createdAt'],
+          order: [['createdAt', 'DESC']],
+        });
+        const courseMap = {};
+        for (const p of allPanel) {
+          const cid = p.CourseId;
+          if (!courseMap[cid]) courseMap[cid] = { shuffledId: null, singleId: null };
+          if (p.isShuffled && !courseMap[cid].shuffledId) courseMap[cid].shuffledId = p.id;
+          else if (!p.isShuffled && !courseMap[cid].singleId) courseMap[cid].singleId = p.id;
+        }
+        const panelIds = Object.values(courseMap).map(g => g.shuffledId || g.singleId).filter(Boolean);
+        // Also include papers this panel member already submitted
+        const submitted = await QuestionPaper.findAll({
+          where: { panelMemberId: req.user.id, status: { [Op.in]: ['with_hod', 'hod_approved'] } },
+          attributes: ['id'],
+        });
+        const submittedIds = submitted.map(p => p.id);
+        const allIds = [...new Set([...panelIds, ...submittedIds])];
+        whereClause = { id: { [Op.in]: allIds.length ? allIds : [0] } };
       }
-      const finalIds = Object.values(courseMap).map(g => g.shuffledId || g.singleId).filter(Boolean);
-      whereClause = { id: { [Op.in]: finalIds.length ? finalIds : [0] } };
     } else if (status) {
       // Explicit status filter from query param (non-panel roles)
       whereClause.status = status;
@@ -449,7 +484,7 @@ router.post('/papers/:id/review', canEdit, async (req, res) => {
 // Panel Member approves the final paper and sends it to the HOD
 router.post('/papers/:id/panel-approve', async (req, res) => {
   try {
-    if (req.user.role !== 'panel_member') {
+    if (!['panel_member', 'panel'].includes(req.user.role)) {
       return res.status(403).json({ success: false, error: 'Only Panel Members can approve at this stage' });
     }
     

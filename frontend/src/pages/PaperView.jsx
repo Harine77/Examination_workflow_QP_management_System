@@ -343,7 +343,7 @@ export default function PaperView() {
   const isFaculty   = role === 'faculty';
   const isS1        = ['scrutinizer_1', 'scrutinizer'].includes(role) && s === 'with_scrutinizer1';
   const isS2        = ['scrutinizer_2', 'scrutinizer'].includes(role) && s === 'with_scrutinizer2';
-  const isPanel     = role === 'panel_member' && ['with_panel', 'randomized'].includes(s);
+  const isPanel     = ['panel_member', 'panel'].includes(role) && ['with_panel', 'randomized'].includes(s);
   const isHOD       = role === 'hod' && s === 'with_hod';
   const showActions = (isFaculty && ['draft','needs_revision'].includes(s)) || isS1 || isS2 || isPanel || isHOD;
 
@@ -723,24 +723,73 @@ export default function PaperView() {
 
               {/* Panel */}
               {isPanel && (
-                <ActionBtn
-                  disabled={acting}
-                  onClick={() => doAction(`/questions/papers/${paper.id}/panel-approve`, {}, 'Paper forwarded to HOD!')}
-                  variant="primary"
-                >
-                  {acting ? 'Processing…' : '📨 Approve & Forward to HOD'}
-                </ActionBtn>
+                <>
+                  <div style={{ width: '100%', marginBottom: '0.75rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>
+                      Comments for HOD (optional)
+                    </label>
+                    <textarea
+                      value={comment}
+                      onChange={e => setComment(e.target.value)}
+                      placeholder="Add your review notes for HOD…"
+                      rows={3}
+                      style={{
+                        width: '100%', border: '1.5px solid #D1D5DB', borderRadius: 10,
+                        padding: '0.75rem', fontSize: '0.88rem', resize: 'vertical',
+                        outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <ActionBtn
+                    disabled={acting}
+                    onClick={() => doAction(`/hod/panel/papers/${paper.id}/submit`, { comments: comment }, 'Paper forwarded to HOD!')}
+                    variant="primary"
+                  >
+                    {acting ? 'Processing…' : '📨 Approve & Forward to HOD'}
+                  </ActionBtn>
+                </>
               )}
 
               {/* HOD */}
               {isHOD && (
-                <ActionBtn
-                  disabled={acting}
-                  onClick={() => doAction(`/questions/papers/${paper.id}/finalize`, {}, 'Paper given final HOD approval!')}
-                  variant="success"
-                >
-                  {acting ? 'Processing…' : '🏛️ Final Approval (HOD)'}
-                </ActionBtn>
+                <>
+                  <div style={{ width: '100%', marginBottom: '0.75rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>
+                      Approval Comments (required)
+                    </label>
+                    <textarea
+                      value={comment}
+                      onChange={e => setComment(e.target.value)}
+                      placeholder="Add your final approval comments…"
+                      rows={3}
+                      style={{
+                        width: '100%', border: '1.5px solid #D1D5DB', borderRadius: 10,
+                        padding: '0.75rem', fontSize: '0.88rem', resize: 'vertical',
+                        outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <ActionBtn
+                    disabled={acting}
+                    onClick={() => {
+                      if (!comment.trim()) { toast.warning('Please add approval comments.'); return; }
+                      doAction(`/hod/papers/${paper.id}/approve`, { comments: comment }, 'Paper given final HOD approval!');
+                    }}
+                    variant="success"
+                  >
+                    {acting ? 'Processing…' : '🏛️ Final Approval (HOD)'}
+                  </ActionBtn>
+                  <ActionBtn
+                    disabled={acting}
+                    onClick={() => {
+                      if (!comment.trim()) { toast.warning('Rejection comments are required.'); return; }
+                      doAction(`/hod/papers/${paper.id}/reject`, { comments: comment }, 'Paper sent back to Panel Member.');
+                    }}
+                    variant="danger"
+                  >
+                    {acting ? 'Processing…' : '↩️ Reject & Send Back'}
+                  </ActionBtn>
+                </>
               )}
             </div>
           </div>

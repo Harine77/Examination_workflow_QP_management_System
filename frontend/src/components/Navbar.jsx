@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -52,6 +53,11 @@ const Navbar = () => {
               >
                 Question Papers
               </Link>
+
+              {/* Notification Bell — Scrutinizer 2 & Panel Member */}
+              {['scrutinizer_2', 'scrutinizer', 'panel_member', 'panel'].includes(user.role) && (
+                <NotificationBell />
+              )}
 
               {/* User Badge */}
               <div className="flex items-center space-x-3">

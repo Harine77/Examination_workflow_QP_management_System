@@ -34,6 +34,7 @@ const pdfRoutes         = require('./routes/pdfRoutes');
 const authRoutes        = require('./routes/authRoutes');
 const scrutinizerRoutes = require('./routes/ScrutinizerRoutes.js');
 const hodRoutes         = require('./routes/hodRoutes.js');
+const notificationRoutes = require('./routes/notificationRoutes.js');
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use('/api/pdf',         pdfRoutes);
 app.use('/api/auth',        authRoutes);
 app.use('/api/scrutinizer', scrutinizerRoutes);
 app.use('/api/hod',         hodRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

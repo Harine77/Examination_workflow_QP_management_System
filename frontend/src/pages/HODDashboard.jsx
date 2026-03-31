@@ -2,638 +2,200 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import api from '../services/api';
+import Navbar from '../components/Navbar';
 
 const HODDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [papers, setPapers] = useState([]);
+  const [approvedPapers, setApprovedPapers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPaperId, setSelectedPaperId] = useState(null);
-  const [comments, setComments] = useState('');
-  const [activityLog, setActivityLog] = useState(null);
-  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [stats, setStats] = useState({ withHod: 0, approved: 0, total: 0 });
+  const [comments, setComments] = useState({});
+  const [acting, setActing] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [showApproved, setShowApproved] = useState(false);
 
-  const styles = `
-    .hod-container {
-      background: #FAFAFA;
-      color: #0A0A0A;
-      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      min-height: 100vh;
-    }
-
-    .hod-header {
-      background: #0A0A0A;
-      color: #FAFAFA;
-      padding: 2rem;
-      border-bottom: 4px solid #F5C400;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .hod-header h1 {
-      font-size: 2.5rem;
-      font-weight: 800;
-      margin: 0;
-      letter-spacing: -0.03em;
-    }
-
-    .hod-header .subtitle {
-      font-size: 0.9rem;
-      color: #ABABAB;
-      margin-top: 0.5rem;
-    }
-
-    .hod-header-right {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-    }
-
-    .logout-btn {
-      padding: 0.6rem 1.2rem;
-      background: rgba(192, 57, 43, 0.2);
-      border: 1px solid rgba(192, 57, 43, 0.5);
-      color: #FF6B6B;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.2s ease;
-    }
-
-    .logout-btn:hover {
-      background: rgba(192, 57, 43, 0.4);
-      border-color: #FF6B6B;
-    }
-
-    .hod-main {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .stat-card {
-      background: white;
-      border: 1px solid #E0E0E0;
-      border-left: 4px solid #F5C400;
-      border-radius: 8px;
-      padding: 1.5rem;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
-    }
-
-    .stat-label {
-      font-size: 0.85rem;
-      color: #6B6B6B;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-bottom: 0.5rem;
-    }
-
-    .stat-value {
-      font-size: 2rem;
-      font-weight: 800;
-      color: #0A0A0A;
-    }
-
-    .papers-title {
-      font-size: 1.8rem;
-      font-weight: 800;
-      margin-bottom: 1.5rem;
-      color: #0A0A0A;
-    }
-
-    .papers-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    .paper-card {
-      background: white;
-      border: 1px solid #E0E0E0;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .paper-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    }
-
-    .paper-card-header {
-      background: #0A0A0A;
-      color: white;
-      padding: 1rem;
-      border-bottom: 2px solid #F5C400;
-    }
-
-    .paper-card-title {
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin: 0;
-    }
-
-    .paper-card-meta {
-      font-size: 0.8rem;
-      color: #ABABAB;
-      margin-top: 0.4rem;
-    }
-
-    .paper-card-body {
-      padding: 1.2rem;
-    }
-
-    .paper-info {
-      margin-bottom: 1rem;
-    }
-
-    .paper-info p {
-      margin: 0.5rem 0;
-      font-size: 0.9rem;
-    }
-
-    .paper-info label {
-      font-weight: 600;
-      color: #0A0A0A;
-    }
-
-    .paper-info-value {
-      color: #6B6B6B;
-    }
-
-    .comment-section {
-      background: #FAFAFA;
-      border: 1px solid #E0E0E0;
-      border-radius: 6px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .comment-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #6B6B6B;
-      text-transform: uppercase;
-      margin-bottom: 0.5rem;
-    }
-
-    .comment-text {
-      font-size: 0.9rem;
-      color: #3A3A3A;
-      line-height: 1.5;
-      max-height: 150px;
-      overflow-y: auto;
-      background: white;
-      padding: 0.75rem;
-      border-radius: 4px;
-      border: 1px solid #D4D4D4;
-    }
-
-    .hod-textarea {
-      width: 100%;
-      background: white;
-      border: 1px solid #E0E0E0;
-      border-radius: 6px;
-      padding: 0.75rem;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 0.9rem;
-      resize: vertical;
-      min-height: 100px;
-      outline: none;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .hod-textarea:focus {
-      border-color: #F5C400;
-      box-shadow: 0 0 0 3px rgba(245, 196, 0, 0.2);
-    }
-
-    .button-group {
-      display: flex;
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-
-    .btn {
-      flex: 1;
-      padding: 0.8rem 1.2rem;
-      border: none;
-      border-radius: 6px;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      font-size: 0.95rem;
-    }
-
-    .btn-approve {
-      background: #1B7A3E;
-      color: white;
-    }
-
-    .btn-approve:hover {
-      background: #155a30;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(27, 122, 62, 0.3);
-    }
-
-    .btn-reject {
-      background: #C0392B;
-      color: white;
-    }
-
-    .btn-reject:hover {
-      background: #a02e22;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(192, 57, 43, 0.3);
-    }
-
-    .btn-activity {
-      background: #3A3A3A;
-      color: white;
-    }
-
-    .btn-activity:hover {
-      background: #2A2A2A;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 3rem;
-      background: white;
-      border: 2px dashed #E0E0E0;
-      border-radius: 10px;
-      color: #6B6B6B;
-    }
-
-    .empty-state h2 {
-      margin: 0 0 0.5rem;
-      color: #3A3A3A;
-    }
-
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-
-    .modal {
-      background: white;
-      border-radius: 12px;
-      max-width: 800px;
-      width: 90%;
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    }
-
-    .modal-header {
-      background: #0A0A0A;
-      color: white;
-      padding: 1.5rem;
-      border-bottom: 2px solid #F5C400;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .modal-header h2 {
-      margin: 0;
-      font-size: 1.3rem;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 1.5rem;
-      cursor: pointer;
-    }
-
-    .modal-body {
-      padding: 2rem;
-    }
-
-    .activity-item {
-      display: flex;
-      gap: 1rem;
-      padding: 1rem;
-      border-left: 3px solid #F5C400;
-      background: #FAFAFA;
-      margin-bottom: 1rem;
-      border-radius: 4px;
-    }
-
-    .activity-stage {
-      font-weight: 600;
-      color: #0A0A0A;
-      min-width: 100px;
-    }
-
-    .activity-details {
-      flex: 1;
-    }
-
-    .activity-action {
-      font-weight: 600;
-      color: #1B7A3E;
-    }
-
-    .activity-actor {
-      font-size: 0.85rem;
-      color: #6B6B6B;
-      margin-top: 0.3rem;
-    }
-
-    .activity-timestamp {
-      font-size: 0.8rem;
-      color: #ABABAB;
-      margin-top: 0.3rem;
-    }
-
-    .activity-comments {
-      background: white;
-      border: 1px solid #E0E0E0;
-      border-radius: 4px;
-      padding: 0.75rem;
-      margin-top: 0.5rem;
-      font-size: 0.9rem;
-      color: #3A3A3A;
-    }
-
-    .loading {
-      text-align: center;
-      padding: 2rem;
-      color: #6B6B6B;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 40px;
-      height: 40px;
-      border: 4px solid #E0E0E0;
-      border-top-color: #F5C400;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  `;
-
-  // Fetch papers for HOD
   const fetchPapers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get('/hod/papers');
-      if (response.data.success) {
-        setPapers(response.data.papers || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch papers:', error);
+      const [papersRes, statusRes, approvedRes] = await Promise.all([
+        api.get('/hod/papers').catch(() => null),
+        api.get('/hod/status').catch(() => null),
+        api.get('/hod/approved-papers').catch(() => null),
+      ]);
+      if (papersRes?.data?.success) setPapers(papersRes.data.papers || []);
+      if (statusRes?.data?.success) setStats(statusRes.data.summary || {});
+      if (approvedRes?.data?.success) setApprovedPapers(approvedRes.data.papers || []);
+    } catch (err) {
+      console.error('Failed to fetch HOD data:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchPapers();
-  }, [fetchPapers]);
-
-  const fetchActivityLog = useCallback(async (paperId) => {
-    try {
-      const response = await api.get(`/hod/papers/${paperId}/activity-log`);
-      if (response.data.success) {
-        setActivityLog(response.data);
-        setShowActivityLog(true);
-      }
-    } catch (error) {
-      console.error('Failed to fetch activity log:', error);
-    }
-  }, []);
+  useEffect(() => { fetchPapers(); }, [fetchPapers]);
 
   const handleApprove = async (paperId) => {
-    if (!comments.trim()) {
-      alert('Please add approval comments');
-      return;
-    }
-
+    const comment = comments[paperId] || '';
+    if (!comment.trim()) { alert('Please add approval comments before approving.'); return; }
+    setActing(paperId + '_approve');
     try {
-      const response = await api.post(`/hod/papers/${paperId}/approve`, {
-        comments
-      });
-
-      if (response.data.success) {
-        alert('Paper approved successfully!');
-        setSelectedPaperId(null);
-        setComments('');
+      const res = await api.post(`/hod/papers/${paperId}/approve`, { comments: comment });
+      if (res.data.success) {
+        alert('Paper approved successfully! Workflow complete.');
+        setComments(prev => ({ ...prev, [paperId]: '' }));
         fetchPapers();
       }
-    } catch (error) {
-      alert('Failed to approve paper: ' + (error.response?.data?.error || error.message));
+    } catch (err) {
+      alert('Failed to approve: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setActing(null);
     }
   };
 
   const handleReject = async (paperId) => {
-    if (!comments.trim()) {
-      alert('Please add rejection comments');
-      return;
-    }
-
+    const comment = comments[paperId] || '';
+    if (!comment.trim()) { alert('Please add rejection comments before rejecting.'); return; }
+    setActing(paperId + '_reject');
     try {
-      const response = await api.post(`/hod/papers/${paperId}/reject`, {
-        comments
-      });
-
-      if (response.data.success) {
-        alert('Paper rejected and sent back to Panel Member');
-        setSelectedPaperId(null);
-        setComments('');
+      const res = await api.post(`/hod/papers/${paperId}/reject`, { comments: comment });
+      if (res.data.success) {
+        alert('Paper sent back to Panel Member for revision.');
+        setComments(prev => ({ ...prev, [paperId]: '' }));
         fetchPapers();
       }
-    } catch (error) {
-      alert('Failed to reject paper: ' + (error.response?.data?.error || error.message));
+    } catch (err) {
+      alert('Failed to reject: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setActing(null);
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  const handleLogout = () => { logout(); navigate('/login'); };
 
   return (
-    <>
-      <style>{styles}</style>
-      <div className="hod-container">
-        {/* Header */}
-        <div className="hod-header">
-          <div>
-            <h1>HOD Dashboard</h1>
-            <p className="subtitle">Final Approval of Question Papers</p>
-          </div>
-          <div className="hod-header-right">
-            <button className="logout-btn" onClick={handleLogout}>
-              ← Logout
-            </button>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-100">
+      <Navbar />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+
+        {/* Welcome */}
+        <div className="text-center mb-12">
+          <div className="text-7xl mb-4">🏛️</div>
+          <h1 className="text-5xl font-bold text-gray-800 mb-3">HOD Dashboard</h1>
+          <p className="text-xl text-gray-600">Final approval of question papers</p>
+        </div>
+
+        {/* User Info */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 max-w-2xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-800">{user?.username}</h3>
+              <p className="text-gray-600">{user?.email}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="px-4 py-2 rounded-full bg-indigo-100 text-indigo-700 font-bold">HOD</div>
+              <button onClick={handleLogout} className="px-4 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-sm transition-all">
+                Logout
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="hod-main">
-          {/* Stats */}
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-label">Pending Approval</div>
-              <div className="stat-value">{papers.length}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Your Role</div>
-              <div className="stat-value" style={{ fontSize: '1.3rem' }}>HOD</div>
-            </div>
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 max-w-4xl mx-auto mb-8">
+          <div className="bg-white rounded-xl shadow p-6 text-center">
+            <div className="text-3xl font-bold text-indigo-600">{stats.withHod ?? 0}</div>
+            <div className="text-sm text-gray-600 mt-1">Awaiting Approval</div>
           </div>
+          <div className="bg-white rounded-xl shadow p-6 text-center">
+            <div className="text-3xl font-bold text-green-600">{stats.approved ?? 0}</div>
+            <div className="text-sm text-gray-600 mt-1">Approved</div>
+          </div>
+          <div className="bg-white rounded-xl shadow p-6 text-center">
+            <div className="text-3xl font-bold text-gray-600">{stats.total ?? 0}</div>
+            <div className="text-sm text-gray-600 mt-1">Total Papers</div>
+          </div>
+        </div>
 
-          {/* Papers */}
-          <h2 className="papers-title">Papers Awaiting Your Approval</h2>
+        {/* Quick Nav */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-10">
+          <button onClick={() => navigate('/papers')} className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left">
+            <div className="text-5xl mb-4">👁️</div>
+            <h3 className="text-2xl font-bold mb-2">View All Papers</h3>
+            <p className="text-sm opacity-90">Browse all question papers in the system</p>
+          </button>
+          <button onClick={() => navigate('/papers?status=with_hod')} className="bg-purple-500 hover:bg-purple-600 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left">
+            <div className="text-5xl mb-4">✅</div>
+            <h3 className="text-2xl font-bold mb-2">Papers Awaiting Approval</h3>
+            <p className="text-sm opacity-90">Review and give final approval to question papers</p>
+          </button>
+        </div>
+
+        {/* Pending Papers */}
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Papers Awaiting Your Approval</h2>
 
           {loading ? (
-            <div className="loading">
-              <div className="spinner" />
+            <div className="text-center py-12 text-gray-500">
+              <div className="inline-block w-10 h-10 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin mb-3" />
               <p>Loading papers...</p>
             </div>
           ) : papers.length === 0 ? (
-            <div className="empty-state">
-              <h2>No pending papers</h2>
-              <p>All papers have been processed. Great job!</p>
+            <div className="bg-white rounded-xl shadow p-10 text-center text-gray-500 border-2 border-dashed border-gray-200">
+              <p className="text-lg font-semibold">No papers pending approval</p>
+              <p className="text-sm mt-1">Papers will appear here once the Panel Member forwards them.</p>
             </div>
           ) : (
-            <div className="papers-grid">
+            <div className="grid gap-6">
               {papers.map(paper => (
-                <div key={paper.id} className="paper-card">
-                  <div className="paper-card-header">
-                    <h3 className="paper-card-title">
-                      {paper.courseCode} - {paper.examType}
-                    </h3>
-                    <p className="paper-card-meta">
-                      {paper.catNumber} • Paper ID: {paper.id}
-                    </p>
+                <div key={paper.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
+                  <div className="bg-gray-900 text-white p-4 border-b-2 border-indigo-400">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold">{paper.courseCode} - {paper.examType} {paper.catNumber}</h3>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-400 text-indigo-900">Pending HOD</span>
+                    </div>
+                    <p className="text-sm text-gray-400 mt-1">{paper.courseName} · Created by {paper.createdBy}</p>
                   </div>
-
-                  <div className="paper-card-body">
-                    {/* Paper Info */}
-                    <div className="paper-info">
-                      <p>
-                        <label>Course:</label>{' '}
-                        <span className="paper-info-value">{paper.courseName}</span>
-                      </p>
-                      <p>
-                        <label>Created By:</label>{' '}
-                        <span className="paper-info-value">{paper.createdBy}</span>
-                      </p>
-                      <p>
-                        <label>Created:</label>{' '}
-                        <span className="paper-info-value">
-                          {new Date(paper.createdAt).toLocaleDateString()}
-                        </span>
-                      </p>
+                  <div className="p-5">
+                    <div className="grid grid-cols-3 gap-3 mb-4 text-center text-sm">
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="font-bold text-blue-700">{paper.sections?.['2M']?.length || 0}</div>
+                        <div className="text-gray-500">2-Mark Qs</div>
+                      </div>
+                      <div className="bg-orange-50 rounded-lg p-3">
+                        <div className="font-bold text-orange-700">{paper.sections?.['6M']?.length || 0}</div>
+                        <div className="text-gray-500">6-Mark Qs</div>
+                      </div>
+                      <div className="bg-purple-50 rounded-lg p-3">
+                        <div className="font-bold text-purple-700">{paper.sections?.['12M']?.length || 0}</div>
+                        <div className="text-gray-500">12-Mark Qs</div>
+                      </div>
                     </div>
-
-                    {/* Sections Summary */}
-                    <div className="paper-info">
-                      <label>Question Sections:</label>
-                      <p className="paper-info-value">
-                        2M: {paper.sections['2M']?.length || 0} | 6M:{' '}
-                        {paper.sections['6M']?.length || 0} | 12M:{' '}
-                        {paper.sections['12M']?.length || 0}
-                      </p>
-                    </div>
-
-                    {/* Panel Comments */}
                     {paper.panelMemberComments && (
-                      <div className="comment-section">
-                        <div className="comment-label">Panel Member Comments</div>
-                        <div className="comment-text">{paper.panelMemberComments}</div>
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm text-gray-700">
+                        <span className="font-semibold">Panel Member Notes:</span> {paper.panelMemberComments}
                       </div>
                     )}
-
-                    {/* Action Buttons */}
-                    <div className="button-group">
-                      <button
-                        className="btn btn-activity"
-                        onClick={() => fetchActivityLog(paper.id)}
-                      >
-                        View History
+                    <textarea
+                      className="w-full border border-gray-200 rounded-lg p-3 text-sm resize-none focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                      rows={3}
+                      placeholder="Add your approval or rejection comments (required)..."
+                      value={comments[paper.id] || ''}
+                      onChange={e => setComments(prev => ({ ...prev, [paper.id]: e.target.value }))}
+                    />
+                    <div className="flex gap-3 mt-3">
+                      <button onClick={() => navigate(`/papers/${paper.id}`)} className="flex-1 py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm transition-all">
+                        View Paper
                       </button>
-                      <button
-                        className="btn btn-approve"
-                        onClick={() =>
-                          setSelectedPaperId(selectedPaperId === paper.id ? null : paper.id)
-                        }
-                      >
-                        {selectedPaperId === paper.id ? 'Close' : 'Review'}
+                      <button onClick={() => handleReject(paper.id)} disabled={!!acting} className="flex-1 py-2 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold text-sm transition-all disabled:opacity-50">
+                        {acting === paper.id + '_reject' ? 'Rejecting...' : '↩ Reject'}
+                      </button>
+                      <button onClick={() => handleApprove(paper.id)} disabled={!!acting} className="flex-1 py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm transition-all disabled:opacity-50">
+                        {acting === paper.id + '_approve' ? 'Approving...' : '✓ Approve'}
                       </button>
                     </div>
-
-                    {/* Review Form */}
-                    {selectedPaperId === paper.id && (
-                      <div
-                        style={{
-                          marginTop: '1rem',
-                          paddingTop: '1rem',
-                          borderTop: '1px solid #E0E0E0'
-                        }}
-                      >
-                        <label style={{ fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
-                          Your Comments (Required)
-                        </label>
-                        <textarea
-                          className="hod-textarea"
-                          placeholder="Enter your approval or rejection comments..."
-                          value={comments}
-                          onChange={e => setComments(e.target.value)}
-                        />
-
-                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                          <button
-                            className="btn btn-approve"
-                            onClick={() => handleApprove(paper.id)}
-                          >
-                            ✓ Approve
-                          </button>
-                          <button
-                            className="btn btn-reject"
-                            onClick={() => handleReject(paper.id)}
-                          >
-                            ✕ Reject
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -641,42 +203,100 @@ const HODDashboard = () => {
           )}
         </div>
 
-        {/* Activity Log Modal */}
-        {showActivityLog && activityLog && (
-          <div className="modal-overlay" onClick={() => setShowActivityLog(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-              <div className="modal-header">
-                <div>
-                  <h2>Paper Review History</h2>
-                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem', color: '#ABABAB' }}>
-                    {activityLog.paper.courseCode} | Current Status: {activityLog.paper.currentStage}
-                  </p>
-                </div>
-                <button className="modal-close" onClick={() => setShowActivityLog(false)}>
-                  ✕
-                </button>
-              </div>
-
-              <div className="modal-body">
-                {activityLog.activity.map((item, idx) => (
-                  <div key={idx} className="activity-item">
-                    <div className="activity-stage">{item.stage}</div>
-                    <div className="activity-details">
-                      <div className="activity-action">{item.action}</div>
-                      <div className="activity-actor">by {item.actor}</div>
-                      <div className="activity-timestamp">
-                        {new Date(item.timestamp).toLocaleString()}
-                      </div>
-                      {item.comments && <div className="activity-comments">{item.comments}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {/* Approved Papers */}
+        <div className="max-w-4xl mx-auto mt-12">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-gray-800">Approved Papers</h2>
+              <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm font-bold">
+                {approvedPapers.length} total
+              </span>
             </div>
+            <button
+              onClick={() => { setShowApproved(v => !v); setExpandedId(null); }}
+              className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition-all shadow"
+            >
+              {showApproved ? '▲ Hide Papers' : '▼ View Approved Papers'}
+            </button>
           </div>
-        )}
+
+          {showApproved && (
+            !loading && approvedPapers.length === 0 ? (
+              <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400 border-2 border-dashed border-gray-200">
+                <p className="text-base font-semibold">No approved papers yet</p>
+              </div>
+            ) : showApproved && (
+              <div className="grid gap-3">
+                {approvedPapers.map(paper => {
+                  const isOpen = expandedId === paper.id;
+                  return (
+                    <div key={paper.id} className="bg-white rounded-xl shadow overflow-hidden">
+                      <button
+                        onClick={() => setExpandedId(isOpen ? null : paper.id)}
+                        className="w-full text-left p-4 flex items-center justify-between gap-4 hover:bg-green-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-8 h-8 flex-shrink-0 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold text-sm">✓</span>
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-800 truncate">{paper.courseCode} — {paper.examType} {paper.catNumber}</p>
+                            <p className="text-xs text-gray-500 truncate">{paper.courseName} · by {paper.createdBy} · Approved {new Date(paper.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <span className="hidden sm:inline px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">HOD Approved</span>
+                          <span className="text-gray-400 text-lg">{isOpen ? '▲' : '▼'}</span>
+                        </div>
+                      </button>
+
+                      {isOpen && (
+                        <div className="border-t border-gray-100 p-5">
+                          <div className="grid grid-cols-3 gap-3 mb-4 text-center text-sm">
+                            <div className="bg-blue-50 rounded-lg p-3">
+                              <div className="font-bold text-blue-700">{paper.sections?.['2M']?.length || 0}</div>
+                              <div className="text-gray-500">2-Mark Qs</div>
+                            </div>
+                            <div className="bg-orange-50 rounded-lg p-3">
+                              <div className="font-bold text-orange-700">{paper.sections?.['6M']?.length || 0}</div>
+                              <div className="text-gray-500">6-Mark Qs</div>
+                            </div>
+                            <div className="bg-purple-50 rounded-lg p-3">
+                              <div className="font-bold text-purple-700">{paper.sections?.['12M']?.length || 0}</div>
+                              <div className="text-gray-500">12-Mark Qs</div>
+                            </div>
+                          </div>
+                          {paper.examDate && (
+                            <p className="text-sm text-gray-500 mb-3">
+                              Exam date: {new Date(paper.examDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
+                          )}
+                          {paper.hodComments && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3 text-sm text-green-800">
+                              <span className="font-semibold">Your Comments:</span> {paper.hodComments}
+                            </div>
+                          )}
+                          {paper.panelMemberComments && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 text-sm text-gray-700">
+                              <span className="font-semibold">Panel Notes:</span> {paper.panelMemberComments}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => navigate(`/papers/${paper.id}`)}
+                            className="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm transition-all"
+                          >
+                            View Full Paper
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+        </div>
+
       </div>
-    </>
+    </div>
   );
 };
 

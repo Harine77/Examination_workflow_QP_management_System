@@ -10,6 +10,7 @@ const QuestionPaper = require('../models/QuestionPaper');
 const Question = require('../models/Question');
 const Course = require('../models/Course');
 const User = require('../models/user');
+const { notifyScrutinizersOnPanelSubmit, notifyPanelOnHodApproval, notifyPanelOnHodRejection } = require('../services/emailService');
 
 // ── Auth: all HOD/Panel routes require a valid JWT ─────────────────────────
 router.use(protect);
@@ -89,6 +90,43 @@ router.get('/papers', requireHod, async (req, res) => {
   }
 });
 
+// ── GET /api/hod/approved-papers ──────────────────────────────────────────
+// HOD sees all papers they have already approved
+router.get('/approved-papers', requireHod, async (req, res) => {
+  try {
+    const papers = await QuestionPaper.findAll({
+      where: { status: 'hod_approved', hodId: req.user.id },
+      include: [
+        { model: Course, attributes: ['id', 'courseCode', 'courseName'] },
+        { model: User, as: 'creator', attributes: ['id', 'username', 'email'] },
+        { model: Question }
+      ],
+      order: [['updatedAt', 'DESC']]
+    });
+
+    const papersData = papers.map(paper => ({
+      id: paper.id,
+      courseCode: paper.Course?.courseCode || '?',
+      courseName: paper.Course?.courseName || 'Unknown',
+      examType: paper.examType,
+      catNumber: paper.catNumber,
+      examDate: paper.examDate,
+      createdBy: paper.creator?.username || 'Unknown',
+      sections: buildQuestionSections(paper.Questions || []),
+      hodComments: paper.hodComments || null,
+      panelMemberComments: paper.panelMemberComments || null,
+      status: paper.status,
+      createdAt: paper.createdAt,
+      updatedAt: paper.updatedAt
+    }));
+
+    res.json({ success: true, papers: papersData });
+  } catch (err) {
+    console.error('GET /hod/approved-papers:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── POST /api/hod/papers/:id/approve ────────────────────────────────────────
 // HOD approves a paper
 router.post('/papers/:id/approve', requireHod, async (req, res) => {
@@ -112,6 +150,18 @@ router.post('/papers/:id/approve', requireHod, async (req, res) => {
       hodId: req.user.id,
       hodComments: comments || null
     });
+
+    // Notify panel member
+    if (paper.panelMemberId) {
+      const panelMember = await User.findByPk(paper.panelMemberId, { attributes: ['username', 'email'] });
+      const course = await Course.findByPk(paper.CourseId, { attributes: ['courseCode'] });
+      notifyPanelOnHodApproval({
+        paper: { ...paper.toJSON(), courseCode: course?.courseCode },
+        hodName: req.user.username,
+        panelMember,
+        comments,
+      });
+    }
 
     res.json({
       success: true,
@@ -149,6 +199,18 @@ router.post('/papers/:id/reject', requireHod, async (req, res) => {
       status: 'with_panel',
       hodComments: comments
     });
+
+    // Notify panel member
+    if (paper.panelMemberId) {
+      const panelMember = await User.findByPk(paper.panelMemberId, { attributes: ['username', 'email'] });
+      const course = await Course.findByPk(paper.CourseId, { attributes: ['courseCode'] });
+      notifyPanelOnHodRejection({
+        paper: { ...paper.toJSON(), courseCode: course?.courseCode },
+        hodName: req.user.username,
+        panelMember,
+        comments,
+      });
+    }
 
     res.json({
       success: true,
@@ -209,12 +271,54 @@ router.get('/panel/papers', requirePanelMember, async (req, res) => {
       sections: buildQuestionSections(paper.Questions || []),
       status: paper.status,
       scrutinizer2Comments: paper.scrutinizer2Comments || null,
+      hodComments: paper.hodComments || null,
       createdAt: paper.createdAt
     }));
 
     res.json({ success: true, papers: papersData });
   } catch (err) {
     console.error('GET /panel/papers:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── GET /api/panel/approved-papers ────────────────────────────────────────
+// Panel Member sees papers they have already submitted to HOD
+router.get('/panel/approved-papers', requirePanelMember, async (req, res) => {
+  try {
+    const papers = await QuestionPaper.findAll({
+      where: {
+        panelMemberId: req.user.id,
+        status: ['with_hod', 'hod_approved']
+      },
+      include: [
+        { model: Course, attributes: ['id', 'courseCode', 'courseName'] },
+        { model: User, as: 'creator', attributes: ['id', 'username', 'email'] },
+        { model: Question }
+      ],
+      order: [['updatedAt', 'DESC']]
+    });
+
+    const papersData = papers.map(paper => ({
+      id: paper.id,
+      courseCode: paper.Course?.courseCode || '?',
+      courseName: paper.Course?.courseName || 'Unknown',
+      examType: paper.examType,
+      catNumber: paper.catNumber,
+      examDate: paper.examDate,
+      createdBy: paper.creator?.username || 'Unknown',
+      isShuffled: paper.isShuffled,
+      sections: buildQuestionSections(paper.Questions || []),
+      status: paper.status,
+      panelMemberComments: paper.panelMemberComments || null,
+      hodComments: paper.hodComments || null,
+      createdAt: paper.createdAt,
+      updatedAt: paper.updatedAt
+    }));
+
+    res.json({ success: true, papers: papersData });
+  } catch (err) {
+    console.error('GET /panel/approved-papers:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -241,6 +345,19 @@ router.post('/panel/papers/:id/submit', requirePanelMember, async (req, res) => 
       status: 'with_hod',
       panelMemberId: req.user.id,
       panelMemberComments: comments || null
+    });
+
+    // Notify scrutinizers who worked on this paper
+    const [s1, s2] = await Promise.all([
+      paper.scrutinizer1Id ? User.findByPk(paper.scrutinizer1Id, { attributes: ['username', 'email'] }) : null,
+      paper.scrutinizer2Id ? User.findByPk(paper.scrutinizer2Id, { attributes: ['username', 'email'] }) : null,
+    ]);
+    const course = await Course.findByPk(paper.CourseId, { attributes: ['courseCode'] });
+    notifyScrutinizersOnPanelSubmit({
+      paper: { ...paper.toJSON(), courseCode: course?.courseCode },
+      panelMemberName: req.user.username,
+      scrutinizer1: s1,
+      scrutinizer2: s2,
     });
 
     res.json({
