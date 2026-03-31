@@ -125,7 +125,12 @@ const PanelDashboard = () => {
               {papers.map(paper => (
                 <div key={paper.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
                   <div className="bg-gray-900 text-white p-4 border-b-2 border-yellow-400">
-                    <h3 className="text-lg font-bold">{paper.courseCode} - {paper.examType} {paper.catNumber}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold">{paper.courseCode} - {paper.examType} {paper.catNumber}</h3>
+                      {paper.isShuffled && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-400 text-green-900">🎲 Shuffled</span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-400 mt-1">{paper.courseName} · Created by {paper.createdBy}</p>
                   </div>
                   <div className="p-5">

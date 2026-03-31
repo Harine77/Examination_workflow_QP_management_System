@@ -556,6 +556,7 @@ router.post('/randomize/:courseId', async (req, res) => {
       catNumber: refPaper.catNumber,
       examDate: refPaper.examDate,
       status: 'with_panel',
+      isShuffled: true,
       createdBy: refPaper.createdBy,
       scrutinizer2Id: req.user.id,
       scrutinizer2Comments: `Shuffled from ${papers.length} papers by Scrutinizer 2`,
