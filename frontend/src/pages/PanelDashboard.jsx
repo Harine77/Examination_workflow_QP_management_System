@@ -48,13 +48,12 @@ const PanelDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-amber-100">
+    <div className="min-h-screen dashboard-bg">
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Welcome Section */}
         <div className="text-center mb-12">
-          <div className="text-7xl mb-4">👥</div>
           <h1 className="text-5xl font-bold text-gray-800 mb-3">Panel Dashboard</h1>
           <p className="text-xl text-gray-600">Review and forward question papers to HOD</p>
         </div>
@@ -92,7 +91,6 @@ const PanelDashboard = () => {
             onClick={() => navigate('/papers')}
             className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left"
           >
-            <div className="text-5xl mb-4">👁️</div>
             <h3 className="text-2xl font-bold mb-2">View All Papers</h3>
             <p className="text-sm opacity-90">Browse all question papers in the system</p>
           </button>
@@ -100,7 +98,6 @@ const PanelDashboard = () => {
             onClick={() => navigate('/papers?status=with_panel')}
             className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left"
           >
-            <div className="text-5xl mb-4">✅</div>
             <h3 className="text-2xl font-bold mb-2">Papers Awaiting Review</h3>
             <p className="text-sm opacity-90">Open randomized final papers and forward to HOD</p>
           </button>
@@ -128,7 +125,7 @@ const PanelDashboard = () => {
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-bold">{paper.courseCode} - {paper.examType} {paper.catNumber}</h3>
                       {paper.isShuffled && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-400 text-green-900">🎲 Shuffled</span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-400 text-green-900">Shuffled</span>
                       )}
                     </div>
                     <p className="text-sm text-gray-400 mt-1">{paper.courseName} · Created by {paper.createdBy}</p>

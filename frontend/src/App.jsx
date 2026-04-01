@@ -14,8 +14,8 @@ import CreatePaper from './pages/CreatePaper';
 import ScrutinizerMainDashboard from './pages/ScrutinizerMainDashboard';
 import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
 import ScrutinizerFinalPaper from './pages/Scrutinizerfinalpaper';
-import HODDashboard from './pages/HODDashboard';
-import PanelDashboard from './pages/PanelDashboard';
+import HODDashboard from './pages/HODDashboardV2';
+import PanelDashboard from './pages/PanelDashboardV2';
 import PaperView from './pages/PaperView';
 
 // Root redirect component that checks auth

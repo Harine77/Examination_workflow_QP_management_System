@@ -1,146 +1,134 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import Navbar from '../components/Navbar';
+import api from '../services/api';
+
+const CATEGORY_STYLES = {
+  received: 'bg-blue-100 text-blue-700',
+  activity: 'bg-emerald-100 text-emerald-700',
+  update: 'bg-indigo-100 text-indigo-700',
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await api.get('/questions/notifications');
+        if (response.data.success) {
+          setNotifications(response.data.notifications || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
 
   const getRoleInfo = () => {
     switch (user.role) {
       case 'faculty':
         return {
           title: 'Faculty Dashboard',
-          description: 'Create and manage your question papers',
-          color: 'blue',
-          icon: '👨‍🏫',
+          description: 'Create, review, and track your question papers across the approval workflow.',
+          roleLabel: 'Faculty',
           actions: [
             {
               title: 'Create Question Paper',
-              description: 'Start creating a new question paper with CO/KL mapping',
-              icon: '📝',
+              description: 'Prepare a new paper with CO and KL mapping.',
               action: () => navigate('/create-paper'),
-              bgColor: 'bg-blue-500',
-              hoverColor: 'hover:bg-blue-600'
             },
             {
               title: 'My Question Papers',
-              description: 'View and edit your submitted question papers',
-              icon: '📋',
+              description: 'Open the paper repository and track current statuses.',
               action: () => navigate('/papers'),
-              bgColor: 'bg-indigo-500',
-              hoverColor: 'hover:bg-indigo-600'
-            }
-          ]
+            },
+          ],
         };
       case 'scrutinizer':
       case 'scrutinizer_1':
         return {
           title: 'Scrutinizer 1 Dashboard',
-          description: 'Review submitted papers and pass them to Scrutinizer 2',
-          color: 'green',
-          icon: '🔍',
+          description: 'Review faculty submissions and move valid papers to the next level.',
+          roleLabel: 'Scrutinizer 1',
           actions: [
             {
               title: 'Papers to Review',
-              description: 'View papers submitted by faculty waiting for your review',
-              icon: '📑',
+              description: 'View submissions currently waiting for first scrutiny.',
               action: () => navigate('/scrutinizer-review'),
-              bgColor: 'bg-green-500',
-              hoverColor: 'hover:bg-green-600'
             },
             {
-              title: 'Review Dashboard',
-              description: 'Open the full paper review and comparison interface',
-              icon: '📚',
+              title: 'Scrutiny Workspace',
+              description: 'Open the complete review dashboard.',
               action: () => navigate('/scrutinizer'),
-              bgColor: 'bg-teal-500',
-              hoverColor: 'hover:bg-teal-600'
-            }
-          ]
+            },
+          ],
         };
       case 'scrutinizer_2':
         return {
           title: 'Scrutinizer 2 Dashboard',
-          description: 'Approve or send back papers reviewed by Scrutinizer 1',
-          color: 'green',
-          icon: '✅',
+          description: 'Approve reviewed papers or return them for revision where required.',
+          roleLabel: 'Scrutinizer 2',
           actions: [
             {
-              title: 'Papers Awaiting Approval',
-              description: 'View papers passed by Scrutinizer 1',
-              icon: '📑',
+              title: 'Awaiting Approval',
+              description: 'Open papers passed by Scrutinizer 1.',
               action: () => navigate('/scrutinizer-review'),
-              bgColor: 'bg-emerald-500',
-              hoverColor: 'hover:bg-emerald-600'
             },
             {
-              title: 'Review Dashboard',
-              description: 'Open the full paper review interface',
-              icon: '📚',
+              title: 'Scrutiny Workspace',
+              description: 'Open the complete review dashboard.',
               action: () => navigate('/scrutinizer'),
-              bgColor: 'bg-green-600',
-              hoverColor: 'hover:bg-green-700'
-            }
-          ]
+            },
+          ],
         };
       case 'panel_member':
         return {
-          title: 'Panel Member Dashboard',
-          description: 'View question papers (Read-only access)',
-          color: 'yellow',
-          icon: '👥',
+          title: 'Panel Dashboard',
+          description: 'Track papers under panel consideration and final faculty return.',
+          roleLabel: 'Panel Member',
           actions: [
             {
-              title: 'View All Papers',
-              description: 'Browse all question papers',
-              icon: '👁️',
-              action: () => navigate('/papers'),
-              bgColor: 'bg-yellow-500',
-              hoverColor: 'hover:bg-yellow-600'
+              title: 'Open Panel Dashboard',
+              description: 'Monitor papers under review, HOD approval, and faculty return.',
+              action: () => navigate('/panel-dashboard'),
             },
             {
-              title: 'Finalized Papers',
-              description: 'View approved question papers',
-              icon: '✅',
-              action: () => navigate('/papers?status=finalized'),
-              bgColor: 'bg-amber-500',
-              hoverColor: 'hover:bg-amber-600'
-            }
-          ]
+              title: 'Question Papers',
+              description: 'Browse papers by workflow stage.',
+              action: () => navigate('/papers'),
+            },
+          ],
         };
       case 'hod':
         return {
           title: 'HOD Dashboard',
-          description: 'Finalize and approve question papers',
-          color: 'purple',
-          icon: '👔',
+          description: 'Approve final papers and track completed academic decisions.',
+          roleLabel: 'HOD',
           actions: [
             {
-              title: 'Papers to Finalize',
-              description: 'Review papers ready for final approval',
-              icon: '✅',
-              action: () => navigate('/papers?status=reviewed'),
-              bgColor: 'bg-purple-500',
-              hoverColor: 'hover:bg-purple-600'
+              title: 'Open HOD Dashboard',
+              description: 'Review pending approvals and completed decisions.',
+              action: () => navigate('/hod-dashboard'),
             },
             {
-              title: 'All Question Papers',
-              description: 'View complete paper repository',
-              icon: '📚',
+              title: 'Question Papers',
+              description: 'Browse the full paper repository by status.',
               action: () => navigate('/papers'),
-              bgColor: 'bg-violet-500',
-              hoverColor: 'hover:bg-violet-600'
-            }
-          ]
+            },
+          ],
         };
       default:
         return {
           title: 'Dashboard',
-          description: 'Welcome to the system',
-          color: 'gray',
-          icon: '📊',
-          actions: []
+          description: 'Welcome to the system.',
+          roleLabel: 'User',
+          actions: [],
         };
     }
   };
@@ -148,64 +136,94 @@ const Dashboard = () => {
   const roleInfo = getRoleInfo();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen dashboard-bg">
       <Navbar />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Welcome Section */}
-        <div className="text-center mb-12">
-          <div className="text-7xl mb-4">{roleInfo.icon}</div>
-          <h1 className="text-5xl font-bold text-gray-800 mb-3">
-            {roleInfo.title}
-          </h1>
-          <p className="text-xl text-gray-600">
-            {roleInfo.description}
-          </p>
-        </div>
 
-        {/* User Info Card */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 max-w-2xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-gray-800">{user.username}</h3>
-              <p className="text-gray-600">{user.email}</p>
-            </div>
-            <div className={`px-4 py-2 rounded-full bg-${roleInfo.color}-100 text-${roleInfo.color}-700 font-bold`}>
-              {user.role.replace('_', ' ').toUpperCase()}
-            </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="rounded-[28px] border border-slate-200 bg-white shadow-xl overflow-hidden">
+          <div className="border-b border-blue-100 bg-[linear-gradient(135deg,#123c8c_0%,#0a2b69_100%)] px-8 py-10 text-white">
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">SSN College of Engineering</div>
+            <h1 className="mt-4 font-serif text-4xl sm:text-5xl">{roleInfo.title}</h1>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-blue-50/90">{roleInfo.description}</p>
           </div>
-        </div>
 
-        {/* Action Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-          {roleInfo.actions.map((action, index) => (
-            <button
-              key={index}
-              onClick={action.action}
-              className={`${action.bgColor} ${action.hoverColor} text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left`}
-            >
-              <div className="text-5xl mb-4">{action.icon}</div>
-              <h3 className="text-2xl font-bold mb-2">{action.title}</h3>
-              <p className="text-sm opacity-90">{action.description}</p>
-            </button>
-          ))}
-        </div>
+          <div className="p-8">
+            <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Profile</div>
+                <div className="mt-4 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-900">{user.username}</h2>
+                    <p className="mt-1 text-sm text-slate-500">{user.email}</p>
+                  </div>
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-800">
+                    {roleInfo.roleLabel}
+                  </span>
+                </div>
 
-        {/* Quick Stats */}
-        <div className="mt-12 bg-white rounded-xl shadow-lg p-6 max-w-4xl mx-auto">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Quick Overview</h3>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <div className="text-3xl font-bold text-blue-600">0</div>
-              <div className="text-sm text-gray-600">Total Papers</div>
-            </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <div className="text-3xl font-bold text-green-600">0</div>
-              <div className="text-sm text-gray-600">Pending</div>
-            </div>
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <div className="text-3xl font-bold text-purple-600">0</div>
-              <div className="text-sm text-gray-600">Completed</div>
+                <div className="mt-8 grid gap-4 md:grid-cols-2">
+                  {roleInfo.actions.map((action, index) => (
+                    <button
+                      key={index}
+                      onClick={action.action}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+                    >
+                      <h3 className="text-lg font-semibold text-slate-900">{action.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">{action.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-3xl border border-slate-200 bg-white p-6">
+                  <h3 className="text-xl font-semibold text-slate-900">Notifications</h3>
+                  {notifications.length === 0 ? (
+                    <p className="mt-4 text-sm text-slate-500">No workflow notifications right now.</p>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {notifications.slice(0, 6).map((item) => (
+                        <button
+                          key={`${item.paperId}-${item.updatedAt}`}
+                          onClick={() => navigate(`/papers/${item.paperId}`)}
+                          className="w-full text-left border border-slate-200 rounded-2xl p-4 hover:shadow-sm transition bg-slate-50"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="font-semibold text-slate-800">{item.title}</div>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${CATEGORY_STYLES[item.category] || 'bg-gray-100 text-gray-600'}`}>
+                                  {item.category || 'update'}
+                                </span>
+                              </div>
+                              <div className="text-sm text-slate-600 mt-1 leading-6">{item.message}</div>
+                            </div>
+                            <div className="text-xs text-slate-400 whitespace-nowrap">{new Date(item.updatedAt).toLocaleDateString()}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                  <h3 className="text-xl font-semibold text-slate-900">Operational Overview</h3>
+                  <div className="mt-5 grid grid-cols-3 gap-4 text-center">
+                    <div className="rounded-2xl bg-white p-4 border border-slate-200">
+                      <div className="text-3xl font-semibold text-slate-900">{notifications.length}</div>
+                      <div className="mt-1 text-sm text-slate-500">Recent Updates</div>
+                    </div>
+                    <div className="rounded-2xl bg-white p-4 border border-slate-200">
+                      <div className="text-3xl font-semibold text-blue-700">2</div>
+                      <div className="mt-1 text-sm text-slate-500">Primary Actions</div>
+                    </div>
+                    <div className="rounded-2xl bg-white p-4 border border-slate-200">
+                      <div className="text-3xl font-semibold text-slate-700">{roleInfo.roleLabel}</div>
+                      <div className="mt-1 text-sm text-slate-500">Active Role</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

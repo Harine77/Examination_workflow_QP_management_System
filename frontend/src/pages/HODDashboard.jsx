@@ -15,7 +15,7 @@ const HODDashboard = () => {
 
   const styles = `
     .hod-container {
-      background: #FAFAFA;
+      background: transparent;
       color: #0A0A0A;
       font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       min-height: 100vh;
@@ -490,7 +490,7 @@ const HODDashboard = () => {
   return (
     <>
       <style>{styles}</style>
-      <div className="hod-container">
+      <div className="hod-container dashboard-bg">
         {/* Header */}
         <div className="hod-header">
           <div>

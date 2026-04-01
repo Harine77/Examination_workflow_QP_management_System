@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import { toast } from 'react-toastify';
+import SSNBrand from '../components/SSNBrand';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -9,24 +10,23 @@ const Signup = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'faculty'
+    role: 'faculty',
   });
   const [loading, setLoading] = useState(false);
-  
+
   const { signup } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation
+
     if (!formData.username || !formData.email || !formData.password) {
       toast.error('Please fill in all fields');
       return;
@@ -45,11 +45,10 @@ const Signup = () => {
     setLoading(true);
     try {
       const response = await signup(formData.username, formData.email, formData.password, formData.role);
-      toast.success('Account created successfully!');
-      
-      // Navigate based on role
+      toast.success('Account created successfully');
+
       const userRole = response.data.data?.role;
-      switch(userRole) {
+      switch (userRole) {
         case 'scrutinizer':
         case 'scrutinizer_1':
         case 'scrutinizer_2':
@@ -74,132 +73,70 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">📝</div>
-          <h2 className="text-4xl font-bold text-indigo-700 mb-2">
-            Create Account
-          </h2>
-          <p className="text-gray-600">
-            Join SSN Question Paper Management System
-          </p>
-        </div>
+    <div className="min-h-screen bg-[linear-gradient(135deg,#f8fbff_0%,#eef4fc_55%,#e6eefb_100%)] px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl grid gap-8 lg:grid-cols-[1.05fr_0.95fr] items-center min-h-[calc(100vh-6rem)]">
+        <section className="rounded-[32px] border border-blue-200 bg-[linear-gradient(135deg,#123c8c_0%,#0a2b69_100%)] px-8 py-10 text-white shadow-2xl lg:px-12 lg:py-14">
+          <SSNBrand light />
+          <div className="mt-10 max-w-2xl">
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-100">Institutional Access</div>
+            <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">Create a professional workflow account for SSN examination management.</h1>
+            <p className="mt-5 text-base leading-7 text-blue-50/90 sm:text-lg">
+              Assign the right review role, keep approvals traceable, and work with a consistent academic process across faculty, scrutiny, panel, and HOD levels.
+            </p>
+          </div>
+        </section>
 
-        {/* Signup Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <section className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-xl sm:p-10">
+          <div className="mb-8">
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Register</div>
+            <h2 className="mt-3 font-serif text-3xl text-slate-900">Create your account</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Use a clear role assignment to keep the workflow organized from the beginning.</p>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Username */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Username
-              </label>
-              <input
-                type="text"
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-                placeholder="john_doe"
-                required
-              />
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Username</label>
+              <input type="text" name="username" value={formData.username} onChange={handleChange} className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-700 focus:bg-white" placeholder="username" required />
             </div>
 
-            {/* Email */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-                placeholder="your.email@example.com"
-                required
-              />
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Email Address</label>
+              <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-700 focus:bg-white" placeholder="name@ssn.edu.in" required />
             </div>
 
-            {/* Role Selection */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Role
-              </label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-              >
-                <option value="faculty">Faculty (Create Papers)</option>
-                <option value="scrutinizer_1">Scrutinizer 1 (First Review)</option>
-                <option value="scrutinizer_2">Scrutinizer 2 (Final Review)</option>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Role</label>
+              <select name="role" value={formData.role} onChange={handleChange} className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-700 focus:bg-white">
+                <option value="faculty">Faculty</option>
+                <option value="scrutinizer_1">Scrutinizer 1</option>
+                <option value="scrutinizer_2">Scrutinizer 2</option>
                 <option value="panel_member">Panel Member</option>
-                <option value="hod">HOD (Final Approval)</option>
+                <option value="hod">HOD</option>
               </select>
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-                placeholder="Minimum 6 characters"
-                required
-              />
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
+              <input type="password" name="password" value={formData.password} onChange={handleChange} className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-700 focus:bg-white" placeholder="Minimum 6 characters" required />
             </div>
 
-            {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-                placeholder="Re-enter your password"
-                required
-              />
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Confirm Password</label>
+              <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-700 focus:bg-white" placeholder="Re-enter password" required />
             </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${
-                loading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg hover:shadow-xl'
-              }`}
-            >
-              {loading ? 'Creating Account...' : 'Sign Up'}
+            <button type="submit" disabled={loading} className={`w-full rounded-2xl py-3 font-semibold text-white transition-all ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0a2b69] hover:bg-[#123c8c] shadow-lg'}`}>
+              {loading ? 'Creating account...' : 'Sign Up'}
             </button>
           </form>
 
-          {/* Login Link */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Already have an account?{' '}
-              <Link
-                to="/login"
-                className="text-indigo-600 hover:text-indigo-700 font-semibold"
-              >
-                Login here
-              </Link>
-            </p>
+          <div className="mt-6 text-center text-sm text-slate-600">
+            Already have an account?{' '}
+            <Link to="/login" className="font-semibold text-blue-700 hover:text-blue-800">
+              Login here
+            </Link>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

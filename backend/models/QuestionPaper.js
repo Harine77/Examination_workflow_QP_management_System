@@ -16,7 +16,8 @@ const QuestionPaper = sequelize.define('QuestionPaper', {
   // ── Workflow status ─────────────────────────────────────────────────────
   // Full lifecycle:
   //   draft → with_scrutinizer1 → with_scrutinizer2 → needs_revision (back to faculty)
-  //        → scrutinizer2_approved → randomized → with_panel → with_hod → hod_approved
+  //        → scrutinizer2_approved → randomized → with_panel → returned_to_faculties
+  //        → with_hod → hod_approved
   // Legacy values (submitted, reviewed, finalized) kept for backward compatibility.
   status: {
     type: DataTypes.ENUM(
@@ -30,6 +31,7 @@ const QuestionPaper = sequelize.define('QuestionPaper', {
       'randomized',           // selected as the final combined paper
       'finalized',            // legacy
       'with_panel',           // sent to Panel Member
+      'returned_to_faculties',// Panel Member finalized and shared with all faculties
       'with_hod',             // Panel Member approved → HOD queue
       'hod_approved'          // HOD gave final sign-off
     ),
@@ -116,6 +118,22 @@ const QuestionPaper = sequelize.define('QuestionPaper', {
   // Comments from Panel Member
   panelMemberComments: {
     type: DataTypes.TEXT,
+    allowNull: true
+  },
+
+  // AI-generated answer key for the finalized paper returned by the panel
+  answerKey: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  },
+
+  answerKeyModel: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+
+  answerKeyGeneratedAt: {
+    type: DataTypes.DATE,
     allowNull: true
   },
 
