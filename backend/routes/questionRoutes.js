@@ -61,6 +61,18 @@ router.post('/paper', canCreate, async (req, res) => {
   try {
     const { courseId, examType, catNumber, examDate } = req.body;
     
+    // Check if faculty is enrolled in this course
+    if (req.user.role === 'faculty') {
+      const enrolledCourses = req.user.enrolledCourses || [];
+      if (!enrolledCourses.includes(parseInt(courseId))) {
+        return res.status(403).json({
+          success: false,
+          error: 'Permission denied',
+          message: 'You are not enrolled in this course. Please request enrollment from HOD.'
+        });
+      }
+    }
+    
     const questionPaper = await QuestionPaper.create({
       CourseId: courseId,
       examType,
@@ -107,7 +119,16 @@ router.get('/papers', async (req, res) => {
           whereClause = { createdBy: req.user.id };
           break;
         case 'scrutinizer_1':
-          whereClause.status = 'with_scrutinizer1';
+          // Only show papers for courses this scrutinizer is enrolled in
+          // If no courses enrolled, show nothing (strict — not all papers)
+          if (req.user.enrolledCourses && req.user.enrolledCourses.length > 0) {
+            whereClause = {
+              status: 'with_scrutinizer1',
+              CourseId: { [Op.in]: req.user.enrolledCourses }
+            };
+          } else {
+            whereClause = { id: -1 }; // show nothing
+          }
           break;
         case 'scrutinizer_2':
           whereClause.status = { [Op.in]: ['with_scrutinizer2', 'scrutinizer2_approved'] };
@@ -690,8 +711,23 @@ router.post('/papers/:id/submit', canCreate, async (req, res) => {
       });
     }
     
-    // Always routes to Scrutinizer 1 queue
-    await paper.update({ status: 'with_scrutinizer1' });
+    // Always routes to Scrutinizer 1 queue — find one enrolled in this course
+    const courseId = paper.CourseId;
+    let assignedScrutinizer1Id = null;
+
+    if (courseId) {
+      const User = require('../models/user');
+      const scrutinizers = await User.findAll({ where: { role: 'scrutinizer_1', isActive: true } });
+      const enrolled = scrutinizers.filter(s =>
+        Array.isArray(s.enrolledCourses) && s.enrolledCourses.includes(courseId)
+      );
+      if (enrolled.length > 0) assignedScrutinizer1Id = enrolled[0].id;
+    }
+
+    await paper.update({
+      status: 'with_scrutinizer1',
+      scrutinizer1Id: assignedScrutinizer1Id || paper.scrutinizer1Id || null,
+    });
     
     res.json({
       success: true,

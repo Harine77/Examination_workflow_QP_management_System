@@ -10,6 +10,7 @@ const ROLE_CONFIG = {
       { title: 'AI Generate Paper', description: 'Enter syllabus and let AI generate questions for you — confirm each one.', path: '/ai-create-paper', color: 'bg-blue-700 hover:bg-blue-800' },
       { title: 'Create Manually', description: 'Type your own questions with CO and KL mapping.', path: '/create-paper', color: 'bg-slate-600 hover:bg-slate-700' },
       { title: 'My Papers', description: 'View and track all your submitted papers.', path: '/papers', color: 'bg-slate-700 hover:bg-slate-800' },
+      { title: 'Request Courses', description: 'Request enrollment in courses to create question papers.', path: '/request-courses', color: 'bg-amber-600 hover:bg-amber-700' },
     ],
   },
   scrutinizer: {
@@ -82,7 +83,7 @@ const Dashboard = () => {
         </div>
 
         {/* Action Cards */}
-        <div className={`grid grid-cols-1 gap-5 ${config.actions.length >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+        <div className={`grid grid-cols-1 gap-5 ${config.actions.length === 4 ? 'sm:grid-cols-2' : config.actions.length >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
           {config.actions.map((action) => (
             <button key={action.path} onClick={() => navigate(action.path)}
               className={`${action.color} text-white rounded-xl p-7 text-left shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5`}>

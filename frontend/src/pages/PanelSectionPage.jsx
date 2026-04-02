@@ -228,7 +228,7 @@ const PanelSectionPage = ({ title, description, sectionKey, accentColor, backPat
                   )}
 
                   {/* Action buttons */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <button onClick={() => navigate(`/papers/${paper.id}`)}
                       className="flex-1 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition">
                       View
@@ -250,8 +250,33 @@ const PanelSectionPage = ({ title, description, sectionKey, accentColor, backPat
                       }}
                       className="flex-1 py-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-white font-semibold text-sm transition"
                     >
-                      Download PDF
+                      Download QP
                     </button>
+                    {/* Answer Key download — only for returned papers */}
+                    {sectionKey === 'returnedToFaculties' && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                            const res = await fetch(`${import.meta.env.VITE_API_URL}/pdf/answer-key/${paper.id}`, {
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            if (!res.ok) {
+                              const err = await res.json().catch(() => ({}));
+                              throw new Error(err.error || 'Failed');
+                            }
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url; a.download = `${paper.courseCode}_AnswerKey.pdf`;
+                            a.click(); URL.revokeObjectURL(url);
+                          } catch (e) { alert('Answer key PDF failed: ' + e.message); }
+                        }}
+                        className="flex-1 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-semibold text-sm transition"
+                      >
+                        Download Answer Key
+                      </button>
+                    )}
                     {isActionable && canSubmit(paper) && (
                       <button onClick={() => handleSubmit(paper.id)} disabled={busy[paper.id] === 'submit'}
                         className="flex-1 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-semibold text-sm transition disabled:opacity-50">

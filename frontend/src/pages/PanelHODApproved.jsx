@@ -1,12 +1,16 @@
-import PanelSectionPage from './PanelSectionPage';
+import PanelCategoryPage from './PanelCategoryPage';
 
 export default function PanelHODApproved() {
   return (
-    <PanelSectionPage
-      title="HOD Approved"
-      description="Approved papers — can still be returned to faculties with answer key."
-      sectionKey="hodApproved"
-      accentColor="border-green-400"
-    />
+    <PanelCategoryPage config={{
+      sectionKey: 'hodApproved',
+      title: 'HOD Approved',
+      description: 'Approved papers — can still be returned to faculties with answer key.',
+      seenKey: 'panel_seen_hodApproved',
+      showDownloadQP: true,
+      showDownloadAK: false,
+      showSubmit: false,
+      showReturn: true,
+    }} />
   );
 }

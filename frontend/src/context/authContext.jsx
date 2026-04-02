@@ -41,12 +41,10 @@ export const AuthProvider = ({ children }) => {
     return response;
   };
 
-  const signup = async (username, email, password, role) => {
+  const signup = async (username, email, password, role, enrolledCourses = []) => {
     const response = await axios.post(`${API_URL}/auth/signup`, {
-      username,
-      email,
-      password,
-      role
+      username, email, password, role,
+      enrolledCourses: role === 'scrutinizer_1' ? enrolledCourses : []
     });
     
     const { token, ...userData } = response.data.data;

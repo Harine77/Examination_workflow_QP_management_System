@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/authContext';
 import api from '../services/api';
+import { toast } from 'react-toastify';
 
 export default function HODDashboardV2() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({ pending: 0, approved: 0 });
+  const [enrollmentRequests, setEnrollmentRequests] = useState([]);
+  const [actingOn, setActingOn] = useState(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -23,7 +26,27 @@ export default function HODDashboardV2() {
     }
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  const fetchEnrollmentRequests = useCallback(async () => {
+    try {
+      const res = await api.get('/auth/enrollment-requests');
+      if (res.data.success) setEnrollmentRequests(res.data.requests || []);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => { fetchStats(); fetchEnrollmentRequests(); }, [fetchStats, fetchEnrollmentRequests]);
+
+  const handleDecide = async (scrutinizerId, action, courseIds) => {
+    setActingOn(scrutinizerId);
+    try {
+      await api.post(`/auth/enrollment-requests/${scrutinizerId}/decide`, { action, courseIds });
+      toast.success(action === 'approve' ? 'Enrollment approved!' : 'Request rejected');
+      fetchEnrollmentRequests();
+    } catch (err) {
+      toast.error('Failed: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setActingOn(null);
+    }
+  };
 
   const actions = [
     { title: 'Pending Approvals', description: 'Review and approve papers waiting for your decision.', path: '/hod-papers', color: 'bg-purple-700 hover:bg-purple-800', badge: stats.pending },
@@ -57,7 +80,7 @@ export default function HODDashboardV2() {
         </div>
 
         {/* Action Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
           {actions.map((action) => (
             <button key={action.path} onClick={() => navigate(action.path)}
               className={`${action.color} text-white rounded-xl p-7 text-left shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5 relative`}>
@@ -71,6 +94,55 @@ export default function HODDashboardV2() {
             </button>
           ))}
         </div>
+
+        {/* Course Enrollment Requests */}
+        {enrollmentRequests.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-2.5 h-2.5 bg-amber-500 rounded-full" />
+              <h3 className="font-bold text-slate-900">Course Enrollment Requests</h3>
+              <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">{enrollmentRequests.length} pending</span>
+            </div>
+            <div className="space-y-4">
+              {enrollmentRequests.map(req => (
+                <div key={req.scrutinizerId} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{req.username}</p>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold uppercase">
+                          {req.role === 'scrutinizer_1' ? 'Scrutinizer' : req.role}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">{req.email}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {req.requestedCourses.map(c => (
+                          <span key={c.id} className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                            {c.courseCode} — {c.courseName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDecide(req.scrutinizerId, 'reject', req.requestedCourses.map(c => c.id))}
+                        disabled={actingOn === req.scrutinizerId}
+                        className="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 font-semibold text-sm transition disabled:opacity-50">
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => handleDecide(req.scrutinizerId, 'approve', req.requestedCourses.map(c => c.id))}
+                        disabled={actingOn === req.scrutinizerId}
+                        className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold text-sm transition disabled:opacity-50">
+                        {actingOn === req.scrutinizerId ? 'Processing...' : 'Approve'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

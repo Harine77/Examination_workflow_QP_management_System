@@ -4,7 +4,18 @@ const Course = require('../models/Course');
 const CourseOutcome = require('../models/CourseOutcome');
 const { protect } = require('../middleware/authMiddleware');
 
-// All routes require authentication
+// Public endpoint — no auth needed (for signup course enrollment)
+// Must be BEFORE router.use(protect)
+router.get('/public', async (req, res) => {
+  try {
+    const courses = await Course.findAll({ attributes: ['id', 'courseCode', 'courseName', 'semester'], order: [['courseCode', 'ASC']] });
+    res.json({ success: true, data: courses });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// All routes below require authentication
 router.use(protect);
 
 // Get all courses (All authenticated users)

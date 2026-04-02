@@ -46,6 +46,17 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Public course list — no auth (for signup enrollment)
+app.get('/api/courses/public', async (req, res) => {
+  try {
+    const Course = require('./models/Course');
+    const courses = await Course.findAll({ attributes: ['id', 'courseCode', 'courseName', 'semester'], order: [['courseCode', 'ASC']] });
+    res.json({ success: true, data: courses });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Routes
 app.use('/api/courses',     courseRoutes);
 app.use('/api/questions',   questionRoutes);

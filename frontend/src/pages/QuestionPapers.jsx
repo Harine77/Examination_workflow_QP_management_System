@@ -1,376 +1,242 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/authContext';
 import api from '../services/api';
 
 const STATUS_META = {
-  draft: { color: 'bg-gray-500', text: 'Draft', section: 'Draft Papers' },
-  submitted: { color: 'bg-blue-500', text: 'Submitted', section: 'Submitted Papers' },
-  with_scrutinizer1: { color: 'bg-blue-600', text: 'With Scrutinizer 1', section: 'With Scrutinizer 1' },
-  with_scrutinizer2: { color: 'bg-violet-600', text: 'With Scrutinizer 2', section: 'With Scrutinizer 2' },
-  needs_revision: { color: 'bg-red-500', text: 'Needs Revision', section: 'Needs Revision' },
-  scrutinizer2_approved: { color: 'bg-emerald-600', text: 'S2 Approved', section: 'Scrutinizer Approved' },
-  randomized: { color: 'bg-amber-500', text: 'Randomized', section: 'Randomized Papers' },
-  with_panel: { color: 'bg-cyan-600', text: 'With Panel', section: 'Received by Panel' },
-  returned_to_faculties: { color: 'bg-teal-600', text: 'Returned to Faculties', section: 'Returned to Faculties' },
-  with_hod: { color: 'bg-purple-600', text: 'With HOD', section: 'Received by HOD' },
-  hod_approved: { color: 'bg-green-600', text: 'HOD Approved', section: 'Approved by HOD' },
-  reviewed: { color: 'bg-green-500', text: 'Reviewed', section: 'Reviewed Papers' },
-  finalized: { color: 'bg-purple-500', text: 'Finalized', section: 'Final Approved Papers' },
+  draft:                 { color: 'bg-slate-500',   text: 'Draft' },
+  submitted:             { color: 'bg-blue-500',    text: 'Submitted' },
+  with_scrutinizer1:     { color: 'bg-blue-600',    text: 'With Scrutinizer 1' },
+  with_scrutinizer2:     { color: 'bg-violet-600',  text: 'With Scrutinizer 2' },
+  needs_revision:        { color: 'bg-red-500',     text: 'Needs Revision' },
+  scrutinizer2_approved: { color: 'bg-emerald-600', text: 'S2 Approved' },
+  randomized:            { color: 'bg-amber-500',   text: 'Randomized' },
+  with_panel:            { color: 'bg-cyan-600',    text: 'With Panel' },
+  returned_to_faculties: { color: 'bg-teal-600',    text: 'Returned to Faculties' },
+  with_hod:              { color: 'bg-purple-600',  text: 'With HOD' },
+  hod_approved:          { color: 'bg-green-600',   text: 'HOD Approved' },
+  reviewed:              { color: 'bg-green-500',   text: 'Reviewed' },
+  finalized:             { color: 'bg-purple-500',  text: 'Finalized' },
 };
 
-const PANEL_STATUS_ORDER = [
-  'with_panel',
-  'with_hod',
-  'returned_to_faculties',
-  'hod_approved',
-  'reviewed',
-  'finalized',
-  'randomized',
+const CATEGORIES = [
+  { key: 'CAT-I',  label: 'CAT I',  examType: 'CAT', catNumber: 'I',  color: 'bg-blue-700 hover:bg-blue-800',    border: 'border-blue-500' },
+  { key: 'CAT-II', label: 'CAT II', examType: 'CAT', catNumber: 'II', color: 'bg-indigo-700 hover:bg-indigo-800', border: 'border-indigo-500' },
+  { key: 'SAT',    label: 'SAT',    examType: 'SAT', catNumber: null, color: 'bg-teal-700 hover:bg-teal-800',     border: 'border-teal-500' },
+  { key: 'SEM',    label: 'SEM',    examType: 'SEM', catNumber: null, color: 'bg-purple-700 hover:bg-purple-800', border: 'border-purple-500' },
 ];
 
-const HOD_STATUS_ORDER = ['with_hod', 'reviewed', 'hod_approved', 'finalized'];
+const FACULTY_SEEN_KEY = 'faculty_seen_papers';
 
-const FILTERS_BY_ROLE = {
-  faculty: ['draft', 'submitted', 'returned_to_faculties', 'reviewed', 'finalized'],
-  scrutinizer: ['submitted', 'with_scrutinizer1', 'with_scrutinizer2', 'needs_revision', 'reviewed'],
-  scrutinizer_1: ['submitted', 'with_scrutinizer1', 'needs_revision'],
-  scrutinizer_2: ['with_scrutinizer2', 'scrutinizer2_approved', 'needs_revision'],
-  panel_member: ['with_panel', 'with_hod', 'hod_approved', 'returned_to_faculties', 'randomized'],
-  panel: ['with_panel', 'with_hod', 'hod_approved', 'returned_to_faculties', 'randomized'],
-  hod: ['with_hod', 'reviewed', 'hod_approved', 'finalized'],
+function matchCategory(paper, cat) {
+  if (paper.examType !== cat.examType) return false;
+  if (cat.catNumber) return paper.catNumber === cat.catNumber;
+  if (cat.examType === 'CAT') return false;
+  return true;
+}
+
+const BACK_PATH = {
+  faculty: '/dashboard',
+  scrutinizer: '/scrutinizer', scrutinizer_1: '/scrutinizer', scrutinizer_2: '/scrutinizer',
+  panel_member: '/panel-dashboard', panel: '/panel-dashboard',
+  hod: '/hod-dashboard',
 };
 
 const QuestionPapers = () => {
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchParams] = useSearchParams();
+  const [selectedCat, setSelectedCat] = useState(null);
+  const [seenIds, setSeenIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(FACULTY_SEEN_KEY) || '[]')); }
+    catch { return new Set(); }
+  });
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isFaculty = user.role === 'faculty';
+  const backPath = BACK_PATH[user.role] || '/dashboard';
 
-  const statusFilter = searchParams.get('status');
-  const isPanel = user.role === 'panel_member';
-  const isHod = user.role === 'hod';
-  const shouldGroupByStatus = !statusFilter && (isPanel || isHod);
-  const availableFilters = FILTERS_BY_ROLE[user.role] || ['draft', 'submitted', 'reviewed', 'finalized'];
-
-  useEffect(() => {
-    fetchPapers();
-  }, [statusFilter]);
+  useEffect(() => { fetchPapers(); }, []);
 
   const fetchPapers = async () => {
     setLoading(true);
     try {
-      const params = statusFilter ? { status: statusFilter } : {};
-      const response = await api.get('/questions/papers', { params });
-      setPapers(response.data.data || []);
-    } catch (error) {
-      toast.error('Failed to fetch question papers');
-      console.error(error);
+      const res = await api.get('/questions/papers');
+      setPapers(res.data.data || []);
+    } catch {
+      toast.error('Failed to fetch papers');
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusBadge = (status) => {
-    const config = STATUS_META[status] || { color: 'bg-gray-500', text: status };
-    return (
-      <span className={`${config.color} text-white px-3 py-1 rounded-full text-xs font-bold`}>
-        {config.text}
-      </span>
-    );
-  };
-
-  const handleViewPaper = (paperId) => {
-    navigate(`/papers/${paperId}`);
-  };
-
-  const handleSubmitPaper = async (paperId) => {
+  const handleSubmit = async (paperId) => {
     if (!window.confirm('Submit this paper for review?')) return;
-
     try {
       await api.post(`/questions/papers/${paperId}/submit`);
-      toast.success('Paper submitted for review!');
+      toast.success('Paper submitted!');
       fetchPapers();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to submit paper');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit');
     }
   };
 
-  const handleReviewPaper = async (paperId) => {
-    const comments = prompt('Enter review comments:');
-    if (!comments) return;
-
-    try {
-      await api.post(`/questions/papers/${paperId}/review`, {
-        reviewComments: comments,
-      });
-      toast.success('Paper reviewed successfully!');
-      fetchPapers();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to review paper');
-    }
+  const markSeen = (catKey) => {
+    const cat = CATEGORIES.find(c => c.key === catKey);
+    const ids = papers.filter(p => matchCategory(p, cat)).map(p => p.id);
+    const newSeen = new Set([...seenIds, ...ids]);
+    setSeenIds(newSeen);
+    localStorage.setItem(FACULTY_SEEN_KEY, JSON.stringify([...newSeen]));
   };
 
-  const handleFinalizePaper = async (paperId) => {
-    const notes = prompt('Enter finalization notes:');
-    if (!notes) return;
-
-    try {
-      await api.post(`/questions/papers/${paperId}/finalize`, {
-        finalizationNotes: notes,
-      });
-      toast.success('Paper finalized successfully!');
-      fetchPapers();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to finalize paper');
-    }
+  const handleSelectCat = (catKey) => {
+    setSelectedCat(catKey);
+    markSeen(catKey);
   };
 
-  const renderPaperCard = (paper) => (
-    <div key={paper.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-      <div className="flex flex-col gap-5 lg:flex-row lg:justify-between lg:items-start">
-        <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-3 mb-2">
-            <h3 className="text-xl font-bold text-gray-800">
-              {paper.Course?.courseCode} - {paper.Course?.courseName}
-            </h3>
-            {getStatusBadge(paper.status)}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
-            <div>
-              <strong>Exam Type:</strong> {paper.examType}
-              {paper.catNumber ? ` - ${paper.catNumber}` : ''}
-            </div>
-            <div>
-              <strong>Created By:</strong> {paper.creator?.username || 'Unknown'}
-            </div>
-            {paper.examDate && (
-              <div>
-                <strong>Exam Date:</strong> {new Date(paper.examDate).toLocaleDateString()}
-              </div>
-            )}
-            <div>
-              <strong>Created:</strong> {new Date(paper.createdAt).toLocaleDateString()}
-            </div>
-          </div>
-
-          {paper.reviewComments && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-2">
-              <strong className="text-green-700">Review Comments:</strong>
-              <p className="text-sm text-gray-700 mt-1">{paper.reviewComments}</p>
-              <p className="text-xs text-gray-500 mt-1">Reviewed by: {paper.reviewer?.username}</p>
-            </div>
-          )}
-
-          {paper.finalizationNotes && (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-              <strong className="text-purple-700">Finalization Notes:</strong>
-              <p className="text-sm text-gray-700 mt-1">{paper.finalizationNotes}</p>
-              <p className="text-xs text-gray-500 mt-1">Finalized by: {paper.finalizer?.username}</p>
-            </div>
-          )}
-
-          {paper.status === 'returned_to_faculties' && (
-            <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 mt-2">
-              <strong className="text-teal-700">Panel Finalization:</strong>
-              <p className="text-sm text-gray-700 mt-1">
-                This finalized paper has been shared with all faculties.
-                {paper.answerKeyGeneratedAt ? ' The answer key is available in the paper details.' : ''}
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col space-y-2 lg:w-48">
-          <button
-            onClick={() => handleViewPaper(paper.id)}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-          >
-            View Details
-          </button>
-
-          {user.role === 'faculty' && paper.createdBy === user.id && paper.status === 'draft' && (
-            <button
-              onClick={() => handleSubmitPaper(paper.id)}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-            >
-              Submit for Review
-            </button>
-          )}
-
-          {(user.role === 'scrutinizer' || user.role === 'scrutinizer_1') && paper.status === 'submitted' && (
-            <button
-              onClick={() => handleReviewPaper(paper.id)}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-            >
-              Review Paper
-            </button>
-          )}
-
-          {user.role === 'hod' && paper.status === 'reviewed' && (
-            <button
-              onClick={() => handleFinalizePaper(paper.id)}
-              className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-            >
-              Finalize Paper
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  const getGroupedSections = () => {
-    const groups = papers.reduce((acc, paper) => {
-      const key = paper.status || 'unknown';
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(paper);
-      return acc;
-    }, {});
-
-    const order = isPanel ? PANEL_STATUS_ORDER : HOD_STATUS_ORDER;
-    const orderedSections = order
-      .filter((status) => groups[status]?.length)
-      .map((status) => ({
-        status,
-        title: STATUS_META[status]?.section || status,
-        items: groups[status],
-      }));
-
-    const remainingSections = Object.keys(groups)
-      .filter((status) => !order.includes(status))
-      .sort()
-      .map((status) => ({
-        status,
-        title: STATUS_META[status]?.section || status,
-        items: groups[status],
-      }));
-
-    return [...orderedSections, ...remainingSections];
+  const hasNew = (catKey) => {
+    const cat = CATEGORIES.find(c => c.key === catKey);
+    return papers.filter(p => matchCategory(p, cat)).some(p => !seenIds.has(p.id));
   };
 
-  const renderEmptyState = () => (
-    <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-      <div className="text-6xl mb-4">Papers</div>
-      <h3 className="text-2xl font-bold text-gray-700 mb-2">No Papers Found</h3>
-      <p className="text-gray-600 mb-6">
-        {user.role === 'faculty'
-          ? "You haven't created any question papers yet."
-          : 'No papers are available in this category right now.'}
-      </p>
-      {user.role === 'faculty' && (
-        <button
-          onClick={() => navigate('/create-paper')}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold"
-        >
-          Create Your First Paper
-        </button>
-      )}
-    </div>
-  );
+  const selectedCatObj = CATEGORIES.find(c => c.key === selectedCat);
+  const filteredPapers = selectedCat ? papers.filter(p => matchCategory(p, selectedCatObj)) : [];
 
-  const renderFilterButtons = () => {
+  // For non-faculty roles, show flat list (no category filter)
+  if (!isFaculty) {
     return (
-      <div className="flex flex-wrap gap-3 mb-6">
-        <button
-          onClick={() => navigate('/papers')}
-          className={`min-w-[140px] px-4 py-2 rounded-lg font-semibold transition-colors ${
-            !statusFilter ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
-          }`}
-        >
-          <span className="inline-flex w-full items-center justify-between gap-2 whitespace-nowrap">
-            <span>All Papers</span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-              !statusFilter ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
-            }`}>
-              {papers.length}
-            </span>
-          </span>
-        </button>
-        {availableFilters.map((status) => (
-          <button
-            key={status}
-            onClick={() => navigate(`/papers?status=${status}`)}
-            className={`min-w-[170px] px-4 py-2 rounded-lg font-semibold transition-colors ${
-              statusFilter === status ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="inline-flex w-full items-center justify-between gap-2 whitespace-nowrap">
-              <span>{STATUS_META[status]?.text || status}</span>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                statusFilter === status ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
-              }`}>
-                {filterCounts[status] || 0}
-              </span>
-            </span>
-          </button>
-        ))}
+      <div className="min-h-screen dashboard-bg">
+        <Navbar />
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="flex items-center gap-4 mb-8">
+            <button onClick={() => navigate(backPath)} className="text-slate-500 hover:text-slate-800 text-sm font-medium transition">← Back</button>
+            <h1 className="text-2xl font-bold text-slate-900">Question Papers</h1>
+          </div>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+              <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mb-3" />
+              <p>Loading...</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {papers.map(paper => (
+                <PaperCard key={paper.id} paper={paper} user={user} onSubmit={handleSubmit} onView={() => navigate(`/papers/${paper.id}`)} borderColor="border-blue-500" />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
-  };
-
-  const groupedSections = shouldGroupByStatus ? getGroupedSections() : [];
-  const filterCounts = papers.reduce((acc, paper) => {
-    const key = paper.status || 'unknown';
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen dashboard-bg">
       <Navbar />
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Question Papers</h1>
-          <p className="text-gray-600">
-            {statusFilter
-              ? `Showing ${STATUS_META[statusFilter]?.text || statusFilter} papers`
-              : shouldGroupByStatus
-                ? 'Papers organized by workflow status'
-                : 'All question papers in the system'}
-          </p>
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={() => selectedCat ? setSelectedCat(null) : navigate(backPath)}
+            className="text-slate-500 hover:text-slate-800 text-sm font-medium transition">← Back</button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              {selectedCat ? `${selectedCatObj?.label} Papers` : 'My Papers'}
+            </h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {selectedCat ? `${filteredPapers.length} paper${filteredPapers.length !== 1 ? 's' : ''}` : 'Select a category'}
+            </p>
+          </div>
+          {!selectedCat && (
+            <button onClick={() => navigate('/ai-create-paper')}
+              className="ml-auto bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold text-sm transition">
+              + New Paper
+            </button>
+          )}
         </div>
 
-        {renderFilterButtons()}
-
         {loading ? (
-          <div className="text-center py-12">
-            <div className="text-2xl text-indigo-600">Loading papers...</div>
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mb-3" />
+            <p>Loading...</p>
           </div>
-        ) : papers.length === 0 ? (
-          renderEmptyState()
-        ) : shouldGroupByStatus ? (
-          <div className="space-y-8">
-            {groupedSections.map((section) => (
-              <section key={section.status} className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800">{section.title}</h2>
-                    <p className="text-sm text-gray-500 mt-1">{section.items.length} paper(s)</p>
-                  </div>
-                  {getStatusBadge(section.status)}
-                </div>
-                <div className="grid grid-cols-1 gap-6">
-                  {section.items.map((paper) => renderPaperCard(paper))}
-                </div>
-              </section>
-            ))}
+        ) : !selectedCat ? (
+          /* Category grid */
+          <div className="grid grid-cols-2 gap-5">
+            {CATEGORIES.map(cat => {
+              const count = papers.filter(p => matchCategory(p, cat)).length;
+              const isNew = hasNew(cat.key);
+              return (
+                <button key={cat.key} onClick={() => handleSelectCat(cat.key)}
+                  className={`${cat.color} text-white rounded-xl p-8 text-left shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5 relative`}>
+                  {isNew && <span className="absolute top-4 right-4 w-3 h-3 bg-red-500 rounded-full ring-2 ring-white" />}
+                  <div className="text-3xl font-bold mb-1">{cat.label}</div>
+                  <div className="text-sm opacity-80">{count > 0 ? `${count} paper${count !== 1 ? 's' : ''}` : 'No papers yet'}</div>
+                  {count > 0 && <div className="mt-3 inline-flex bg-white/20 rounded-full px-3 py-1 text-xs font-bold">{count} papers</div>}
+                </button>
+              );
+            })}
+          </div>
+        ) : filteredPapers.length === 0 ? (
+          <div className="bg-white rounded-xl border-2 border-dashed border-slate-200 p-16 text-center">
+            <p className="text-lg font-semibold text-slate-700">No {selectedCatObj?.label} papers yet</p>
+            <button onClick={() => navigate('/ai-create-paper')}
+              className="mt-4 bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg font-semibold text-sm transition">
+              Create One
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {papers.map((paper) => renderPaperCard(paper))}
+          <div className="grid gap-4">
+            {filteredPapers.map(paper => (
+              <PaperCard key={paper.id} paper={paper} user={user} onSubmit={handleSubmit}
+                onView={() => navigate(`/papers/${paper.id}`)} borderColor={selectedCatObj?.border} />
+            ))}
           </div>
         )}
       </div>
     </div>
   );
 };
+
+function PaperCard({ paper, user, onSubmit, onView, borderColor }) {
+  const navigate = useNavigate();
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className={`bg-slate-900 text-white px-5 py-3 border-b-2 ${borderColor || 'border-blue-500'}`}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="font-bold text-base">{paper.Course?.courseCode} — {paper.Course?.courseName}</h3>
+          <span className={`${STATUS_META[paper.status]?.color || 'bg-slate-500'} text-white px-2.5 py-0.5 rounded-full text-xs font-bold`}>
+            {STATUS_META[paper.status]?.text || paper.status}
+          </span>
+          {paper.catNumber && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white/10">{paper.examType} {paper.catNumber}</span>}
+        </div>
+        <p className="text-xs text-slate-400 mt-0.5">
+          {paper.examType}{paper.catNumber ? ` — ${paper.catNumber}` : ''} · {new Date(paper.createdAt).toLocaleDateString()}
+        </p>
+      </div>
+      <div className="px-5 py-4">
+        {paper.status === 'needs_revision' && (
+          <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
+            Sent back for revision. Please review and resubmit.
+          </div>
+        )}
+        {paper.status === 'returned_to_faculties' && (
+          <div className="mb-3 rounded-lg bg-teal-50 border border-teal-200 px-3 py-2 text-sm text-teal-800">
+            Finalized paper returned to faculties.{paper.answerKeyGeneratedAt ? ' Answer key available.' : ''}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button onClick={onView} className="flex-1 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition">View</button>
+          {user.role === 'faculty' && paper.status === 'draft' && (
+            <button onClick={() => onSubmit(paper.id)} className="flex-1 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-semibold text-sm transition">Submit</button>
+          )}
+          {user.role === 'faculty' && paper.status === 'needs_revision' && (
+            <button onClick={() => navigate(`/papers/${paper.id}/edit`)} className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition">Edit & Resubmit</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default QuestionPapers;

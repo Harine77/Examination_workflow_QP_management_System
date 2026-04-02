@@ -174,6 +174,22 @@ export default function AICreatePaper() {
         })),
       });
       const saved = res.data.data;
+      
+      // Check if faculty is enrolled in this course
+      const userRes = await api.get('/auth/me');
+      const enrolledCourses = userRes.data.data?.enrolledCourses || [];
+      
+      if (!enrolledCourses.includes(saved.id)) {
+        // Auto-request enrollment for this course
+        try {
+          await api.post('/auth/request-courses', { courseIds: [saved.id] });
+          toast.warning('Course created! Enrollment request sent to HOD. You can generate papers after approval.', { autoClose: 5000 });
+        } catch (err) {
+          toast.error('Course created but failed to request enrollment. Please request manually from dashboard.');
+        }
+        return;
+      }
+      
       setCourseId(saved.id);
       const map = {};
       (saved.CourseOutcomes || []).forEach(co => { map[co.coNumber] = co.id; });

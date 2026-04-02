@@ -130,6 +130,22 @@ function QuestionPaperCreator() {
       });
 
       const savedCourse = response.data.data;
+      
+      // Check if faculty is enrolled in this course
+      const userRes = await api.get('/auth/me');
+      const enrolledCourses = userRes.data.data?.enrolledCourses || [];
+      
+      if (!enrolledCourses.includes(savedCourse.id)) {
+        // Auto-request enrollment for this course
+        try {
+          await api.post('/auth/request-courses', { courseIds: [savedCourse.id] });
+          toast.warning('Course created! Enrollment request sent to HOD. You can create papers after approval.', { autoClose: 5000 });
+        } catch (err) {
+          toast.error('Course created but failed to request enrollment. Please request manually from dashboard.');
+        }
+        return;
+      }
+      
       setCourseId(savedCourse.id);
 
       // Build a CO number → DB id map so questions can reference their CourseOutcome FK

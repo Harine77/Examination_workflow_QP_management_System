@@ -1,12 +1,16 @@
-import PanelSectionPage from './PanelSectionPage';
+import PanelCategoryPage from './PanelCategoryPage';
 
 export default function PanelSubmittedToHOD() {
   return (
-    <PanelSectionPage
-      title="Submitted to HOD"
-      description="Papers already forwarded to HOD for approval."
-      sectionKey="submittedToHod"
-      accentColor="border-indigo-400"
-    />
+    <PanelCategoryPage config={{
+      sectionKey: 'submittedToHod',
+      title: 'Submitted to HOD',
+      description: 'Papers already forwarded to HOD for approval.',
+      seenKey: 'panel_seen_submittedToHod',
+      showDownloadQP: true,
+      showDownloadAK: false,
+      showSubmit: false,
+      showReturn: false,
+    }} />
   );
 }

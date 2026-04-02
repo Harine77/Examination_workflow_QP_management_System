@@ -1,12 +1,16 @@
-import PanelSectionPage from './PanelSectionPage';
+import PanelCategoryPage from './PanelCategoryPage';
 
 export default function PanelReturned() {
   return (
-    <PanelSectionPage
-      title="Returned to Faculties"
-      description="Finalized papers returned with AI-generated answer keys."
-      sectionKey="returnedToFaculties"
-      accentColor="border-teal-400"
-    />
+    <PanelCategoryPage config={{
+      sectionKey: 'returnedToFaculties',
+      title: 'Returned to Faculties',
+      description: 'Finalized papers returned with AI-generated answer keys.',
+      seenKey: 'panel_seen_returned',
+      showDownloadQP: true,
+      showDownloadAK: true,
+      showSubmit: false,
+      showReturn: false,
+    }} />
   );
 }

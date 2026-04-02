@@ -39,6 +39,18 @@ const User = sequelize.define('User', {
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  // Courses enrolled for scrutinizer_1 and faculty — array of Course IDs
+  enrolledCourses: {
+    type: DataTypes.ARRAY(DataTypes.INTEGER),
+    allowNull: true,
+    defaultValue: []
+  },
+  // Pending course enrollment requests awaiting HOD approval (for scrutinizer_1 and faculty)
+  pendingCourseRequests: {
+    type: DataTypes.ARRAY(DataTypes.INTEGER),
+    allowNull: true,
+    defaultValue: []
   }
 }, {
   hooks: {

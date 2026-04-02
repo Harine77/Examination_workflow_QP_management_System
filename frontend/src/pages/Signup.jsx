@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import { toast } from 'react-toastify';
 import SSNBrand from '../components/SSNBrand';
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -12,16 +15,32 @@ const Signup = () => {
     confirmPassword: '',
     role: 'faculty',
   });
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [availableCourses, setAvailableCourses] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const { signup } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // Fetch courses for enrollment dropdown
+    const fetchCourses = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/courses/public`);
+        setAvailableCourses(res.data.data || []);
+      } catch { /* ignore */ }
+    };
+    fetchCourses();
+  }, []);
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const toggleCourse = (courseId) => {
+    setEnrolledCourses(prev =>
+      prev.includes(courseId) ? prev.filter(id => id !== courseId) : [...prev, courseId]
+    );
   };
 
   const handleSubmit = async (e) => {
@@ -42,9 +61,14 @@ const Signup = () => {
       return;
     }
 
+    if (formData.role === 'scrutinizer_1' && enrolledCourses.length === 0) {
+      toast.error('Scrutinizer 1 must enroll in at least one course');
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await signup(formData.username, formData.email, formData.password, formData.role);
+      const response = await signup(formData.username, formData.email, formData.password, formData.role, enrolledCourses);
       toast.success('Account created successfully');
 
       const userRole = response.data.data?.role;
@@ -114,6 +138,40 @@ const Signup = () => {
                 <option value="hod">HOD</option>
               </select>
             </div>
+
+            {/* Course enrollment — only for Scrutinizer 1 */}
+            {formData.role === 'scrutinizer_1' && (
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Enroll in Courses <span className="text-red-500">*</span>
+                </label>
+                <p className="text-xs text-slate-500 mb-2">Select the courses you are responsible for reviewing. Only papers from these courses will be assigned to you.</p>
+                {availableCourses.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                    No courses available yet. Ask admin to add courses first.
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 max-h-48 overflow-y-auto space-y-2">
+                    {availableCourses.map(course => (
+                      <label key={course.id} className="flex items-center gap-3 cursor-pointer hover:bg-white rounded-lg px-2 py-1.5 transition">
+                        <input
+                          type="checkbox"
+                          checked={enrolledCourses.includes(course.id)}
+                          onChange={() => toggleCourse(course.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-slate-700">
+                          <span className="font-semibold text-blue-700">{course.courseCode}</span> — {course.courseName}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {enrolledCourses.length > 0 && (
+                  <p className="text-xs text-green-600 mt-1">{enrolledCourses.length} course{enrolledCourses.length !== 1 ? 's' : ''} selected</p>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">Password</label>

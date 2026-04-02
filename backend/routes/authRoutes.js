@@ -18,13 +18,21 @@ const generateToken = (id) => {
 // @access  Public
 router.post('/signup', async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, enrolledCourses } = req.body;
 
     // Validation
     if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
         message: 'Please provide username, email and password'
+      });
+    }
+
+    // Scrutinizer 1 must enroll in at least one course
+    if (role === 'scrutinizer_1' && (!enrolledCourses || enrolledCourses.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Scrutinizer 1 must enroll in at least one course'
       });
     }
 
@@ -47,7 +55,8 @@ router.post('/signup', async (req, res) => {
       username,
       email,
       password,
-      role: role || 'faculty'
+      role: role || 'faculty',
+      enrolledCourses: role === 'scrutinizer_1' ? (enrolledCourses || []) : []
     });
 
     // Generate token
@@ -61,6 +70,7 @@ router.post('/signup', async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        enrolledCourses: user.enrolledCourses || [],
         token
       }
     });
@@ -129,6 +139,7 @@ router.post('/login', async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        enrolledCourses: user.enrolledCourses || [],
         token
       }
     });
@@ -240,6 +251,94 @@ router.put('/change-password', protect, async (req, res) => {
       message: 'Error changing password',
       error: error.message
     });
+  }
+});
+
+// Update enrolled courses for scrutinizer_1 and faculty
+router.put('/enrolled-courses', protect, async (req, res) => {
+  try {
+    // Allow any authenticated user to update their enrolled courses
+    const { enrolledCourses } = req.body;
+    await req.user.update({ enrolledCourses: enrolledCourses || [] });
+    res.json({ success: true, message: 'Enrolled courses updated', enrolledCourses: req.user.enrolledCourses });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Scrutinizer 1 and Faculty request course enrollment — goes to HOD for approval
+router.post('/request-courses', protect, async (req, res) => {
+  try {
+    console.log('Request courses - User role:', req.user.role); // Debug log
+    
+    // Allow faculty, scrutinizer_1, and any other role to request courses
+    const { courseIds } = req.body;
+    if (!courseIds || courseIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'No courses selected' });
+    }
+    // Merge with existing pending requests (avoid duplicates)
+    const existing = req.user.pendingCourseRequests || [];
+    const merged = [...new Set([...existing, ...courseIds])];
+    await req.user.update({ pendingCourseRequests: merged });
+    res.json({ success: true, message: 'Course enrollment request sent to HOD for approval' });
+  } catch (err) {
+    console.error('Request courses error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// HOD: get all pending enrollment requests
+router.get('/enrollment-requests', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'hod') {
+      return res.status(403).json({ success: false, message: 'Only HOD can view enrollment requests' });
+    }
+    const Course = require('../models/Course');
+    const users = await User.findAll({
+      where: { role: ['scrutinizer_1', 'faculty'] },
+      attributes: ['id', 'username', 'email', 'role', 'enrolledCourses', 'pendingCourseRequests'],
+    });
+    const requests = [];
+    for (const u of users) {
+      if (u.pendingCourseRequests && u.pendingCourseRequests.length > 0) {
+        const courses = await Course.findAll({ where: { id: u.pendingCourseRequests }, attributes: ['id', 'courseCode', 'courseName'] });
+        requests.push({ 
+          scrutinizerId: u.id, // keeping the same field name for backward compatibility
+          userId: u.id,
+          username: u.username, 
+          email: u.email,
+          role: u.role,
+          requestedCourses: courses 
+        });
+      }
+    }
+    res.json({ success: true, requests });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// HOD: approve or reject enrollment request
+router.post('/enrollment-requests/:scrutinizerId/decide', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'hod') {
+      return res.status(403).json({ success: false, message: 'Only HOD can approve enrollment requests' });
+    }
+    const { action, courseIds } = req.body; // action: 'approve' | 'reject'
+    const user = await User.findByPk(req.params.scrutinizerId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (action === 'approve') {
+      const current = user.enrolledCourses || [];
+      const newEnrolled = [...new Set([...current, ...courseIds])];
+      await user.update({ enrolledCourses: newEnrolled, pendingCourseRequests: [] });
+      res.json({ success: true, message: 'Enrollment approved' });
+    } else {
+      await user.update({ pendingCourseRequests: [] });
+      res.json({ success: true, message: 'Enrollment request rejected' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

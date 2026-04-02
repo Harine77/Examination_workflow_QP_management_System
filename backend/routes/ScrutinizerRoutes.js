@@ -56,7 +56,16 @@ router.get('/papers', async (req, res) => {
     const role = req.user.role;
 
     if (role === 'scrutinizer_1' || role === 'scrutinizer') {
-      whereClause.status = 'with_scrutinizer1';
+      if (role === 'scrutinizer_1' && req.user.enrolledCourses && req.user.enrolledCourses.length > 0) {
+        whereClause = {
+          status: 'with_scrutinizer1',
+          CourseId: { [Op.in]: req.user.enrolledCourses }
+        };
+      } else if (role === 'scrutinizer_1') {
+        whereClause = { id: -1 }; // no enrolled courses — show nothing
+      } else {
+        whereClause.status = 'with_scrutinizer1';
+      }
     } else if (role === 'scrutinizer_2') {
       whereClause.status = { [Op.in]: ['with_scrutinizer2', 'scrutinizer2_approved'] };
     } else {

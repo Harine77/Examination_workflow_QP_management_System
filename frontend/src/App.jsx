@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard';
 import QuestionPapers from './pages/QuestionPapers';
 import CreatePaper from './pages/CreatePaper';
 import AICreatePaper from './pages/AICreatePaper';
+import EditPaper from './pages/EditPaper';
 import ScrutinizerMainDashboard from './pages/ScrutinizerMainDashboard';
 import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
 import ScrutinizerFinalPaper from './pages/Scrutinizerfinalpaper';
@@ -24,6 +25,7 @@ import PanelSubmittedToHOD from './pages/PanelSubmittedToHOD';
 import PanelHODApproved from './pages/PanelHODApproved';
 import PanelReturned from './pages/PanelReturned';
 import PaperView from './pages/PaperView';
+import RequestCourseEnrollment from './pages/RequestCourseEnrollment';
 
 // Root redirect component that checks auth
 function RootRedirect() {
@@ -90,6 +92,8 @@ function App() {
 
             <Route path="/create-paper" element={<PrivateRoute allowedRoles={['faculty']}><CreatePaper /></PrivateRoute>} />
             <Route path="/ai-create-paper" element={<PrivateRoute allowedRoles={['faculty']}><AICreatePaper /></PrivateRoute>} />
+            <Route path="/papers/:id/edit" element={<PrivateRoute allowedRoles={['faculty']}><EditPaper /></PrivateRoute>} />
+            <Route path="/request-courses" element={<PrivateRoute allowedRoles={['faculty', 'scrutinizer_1']}><RequestCourseEnrollment /></PrivateRoute>} />
 
             {/* Scrutinizer Routes */}
             <Route
