@@ -121,3 +121,71 @@ router.get('/download/:filename', (req, res) => {
 });
 
 module.exports = router;
+
+// Generate PDF from paper ID — panel members only
+router.get('/paper/:id', async (req, res) => {
+  try {
+    if (!['panel', 'panel_member'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, error: 'Only panel members can download PDFs' });
+    }
+
+    const paper = await QuestionPaper.findByPk(req.params.id, {
+      include: [
+        { model: Course, attributes: ['courseCode', 'courseName', 'semester'] },
+        { model: Question, include: [{ model: CourseOutcome, attributes: ['coNumber'] }] },
+      ],
+    });
+
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    const questions = (paper.Questions || []).sort((a, b) => {
+      if (a.part !== b.part) return a.part.localeCompare(b.part);
+      return a.questionNumber - b.questionNumber;
+    });
+
+    const partA = questions.filter(q => q.part === 'A');
+    const partB = questions.filter(q => q.part === 'B');
+    const partC = questions.filter(q => q.part === 'C');
+
+    const courseInfo = {
+      courseCode: paper.Course?.courseCode || '',
+      courseName: paper.Course?.courseName || '',
+      semester: paper.Course?.semester || '',
+      department: 'Computer Science and Engineering',
+      degree: 'B.E. / B.Tech.',
+      branch: 'CSE',
+      regulation: 'R2021',
+      catNumber: paper.catNumber || '',
+      examDate: paper.examDate ? new Date(paper.examDate).toLocaleDateString() : '',
+      month: '',
+      year: '',
+    };
+
+    const courseOutcomes = [
+      { coNumber: 'CO1', description: 'Course Outcome 1' },
+      { coNumber: 'CO2', description: 'Course Outcome 2' },
+      { coNumber: 'CO3', description: 'Course Outcome 3' },
+    ];
+
+    const pdfData = {
+      courseInfo,
+      courseOutcomes,
+      questions: {
+        partA: partA.map(q => ({ number: q.questionNumber, text: q.questionText, kl: q.klLevel || '', co: q.CourseOutcome?.coNumber || '', marks: q.marks })),
+        partB: partB.map(q => ({ number: q.questionNumber, text: q.questionText, kl: q.klLevel || '', co: q.CourseOutcome?.coNumber || '', marks: q.marks })),
+        partC: partC.map((q, i) => ({ number: q.questionNumber, text: q.questionText, kl: q.klLevel || '', co: q.CourseOutcome?.coNumber || '', marks: q.marks, isOr: i % 2 === 1 })),
+      },
+      examFormat: paper.examType || 'CAT',
+    };
+
+    const pdfBuffer = await PDFService.generatePDF(pdfData);
+    const filename = `${paper.Course?.courseCode || 'paper'}_${paper.examType || 'exam'}${paper.catNumber ? '_' + paper.catNumber : ''}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('PDF paper route error:', err);
+    res.status(500).json({ success: false, error: 'Failed to generate PDF', message: err.message });
+  }
+});

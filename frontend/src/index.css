@@ -9,9 +9,10 @@ html {
 body {
   margin: 0;
   font-family: Georgia, 'Times New Roman', serif;
-  background:
-    radial-gradient(circle at top left, rgba(29, 78, 216, 0.12), transparent 28%),
-    linear-gradient(180deg, #f8fbff 0%, #edf3fb 100%);
+  background-image: url('/campus-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -19,6 +20,7 @@ body {
 
 #root {
   min-height: 100vh;
+  background: rgba(248, 250, 252, 0.65);
 }
 
 a {

@@ -391,6 +391,52 @@ router.get('/overview', requireHod, async (req, res) => {
   }
 });
 
+// Panel Member returns paper to faculties WITHOUT answer key (status update only)
+// Answer key is generated on the frontend via Ollama and saved separately
+router.post('/panel/papers/:id/return-to-faculties-simple', requirePanelMember, async (req, res) => {
+  const { comments } = req.body;
+  try {
+    const paper = await QuestionPaper.findByPk(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    if (!['with_panel', 'with_hod', 'hod_approved'].includes(paper.status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Paper is at stage '${paper.status}'. Must be with Panel, HOD, or HOD approved.`,
+      });
+    }
+
+    await paper.update({
+      status: 'returned_to_faculties',
+      panelMemberId: req.user.id,
+      panelMemberComments: comments || null,
+    });
+
+    res.json({ success: true, message: 'Paper returned to faculties', data: paper });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Save answer key generated on the frontend
+router.post('/panel/papers/:id/save-answer-key', requirePanelMember, async (req, res) => {
+  const { answerKey, model } = req.body;
+  try {
+    const paper = await QuestionPaper.findByPk(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    await paper.update({
+      answerKey: answerKey || null,
+      answerKeyModel: model || 'llama3.2:1b',
+      answerKeyGeneratedAt: new Date(),
+    });
+
+    res.json({ success: true, message: 'Answer key saved' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Panel Member finalizes the paper, generates an answer key via Ollama,
 // and returns the finalized paper to all faculties.
 router.post('/panel/papers/:id/return-to-faculties', requirePanelMember, async (req, res) => {

@@ -1,26 +1,47 @@
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import Navbar from '../components/Navbar';
+import api from '../services/api';
 
 const ScrutinizerMainDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [stats, setStats] = useState({ pending: 0, approved: 0, flagged: 0 });
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await api.get('/scrutinizer/papers');
+      // papers is an array of question rows, group by paper_title
+      const papers = res.data.papers || res.data || [];
+      const allPapers = Array.isArray(papers) ? papers : [];
+      setStats({
+        pending: allPapers.filter(p => !p.review_status).length,
+        approved: allPapers.filter(p => p.review_status === 'APPROVED').length,
+        flagged: allPapers.filter(p => p.review_status === 'SUGGESTED').length,
+      });
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+
+  const isS2 = user?.role === 'scrutinizer_2';
+  const accent = 'border-emerald-500';
 
   const actions = [
     {
-      title: 'View All Papers',
-      description: 'Browse and review all question papers currently in the system.',
-      action: () => navigate('/scrutinizer-all-papers'),
-    },
-    {
       title: 'Papers for Review',
-      description: 'Open the list of papers pending scrutiny and feedback.',
-      action: () => navigate('/scrutinizer-review'),
+      description: isS2 ? 'Review papers passed by Scrutinizer 1.' : 'Open papers pending first scrutiny.',
+      path: '/scrutinizer-review',
+      color: 'bg-emerald-700 hover:bg-emerald-800',
+      badge: stats.pending,
     },
     {
-      title: 'My Reviews',
-      description: 'Review your scrutiny decisions and workflow progress.',
-      action: () => navigate('/scrutinizer-reviews'),
+      title: 'All Papers',
+      description: 'Browse all question papers in the system.',
+      path: '/scrutinizer-all-papers',
+      color: 'bg-slate-700 hover:bg-slate-800',
+      badge: null,
     },
   ];
 
@@ -28,68 +49,48 @@ const ScrutinizerMainDashboard = () => {
     <div className="min-h-screen dashboard-bg">
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="rounded-[28px] border border-slate-200 bg-white shadow-xl overflow-hidden mb-10">
-          <div className="border-b border-amber-100 bg-[linear-gradient(135deg,#123c8c_0%,#0a2b69_100%)] px-8 py-10 text-white">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">SSN College of Engineering</div>
-            <h1 className="mt-4 font-serif text-4xl sm:text-5xl">Scrutinizer Dashboard</h1>
-            <p className="mt-3 text-base leading-7 text-blue-50/90">Review, verify, and advance question papers through the academic scrutiny process.</p>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        {/* Header */}
+        <div className={`rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white px-8 py-10 mb-10 border-b-4 ${accent}`}>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">SSN College of Engineering</p>
+          <h1 className="text-4xl font-bold">
+            {isS2 ? 'Scrutinizer 2' : 'Scrutinizer 1'} Dashboard
+          </h1>
+          <p className="text-slate-300 mt-2 text-sm">
+            Logged in as <span className="font-semibold text-white">{user?.username}</span> · {user?.email}
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-10">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 text-center">
+            <div className="text-3xl font-bold text-amber-600">{stats.pending}</div>
+            <div className="text-xs text-slate-500 mt-1 uppercase tracking-wide">Pending Review</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 text-center">
+            <div className="text-3xl font-bold text-green-600">{stats.approved}</div>
+            <div className="text-xs text-slate-500 mt-1 uppercase tracking-wide">Approved</div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 text-center">
+            <div className="text-3xl font-bold text-red-500">{stats.flagged}</div>
+            <div className="text-xs text-slate-500 mt-1 uppercase tracking-wide">Flagged</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 max-w-3xl mx-auto border border-slate-200">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">{user?.username}</h3>
-              <p className="text-slate-500">{user?.email}</p>
-            </div>
-            <div className="px-4 py-2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold">
-              SCRUTINIZER
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Action Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {actions.map((action) => (
-            <button
-              key={action.title}
-              onClick={action.action}
-              className="rounded-3xl border border-slate-200 bg-white p-8 text-left shadow-md transition hover:-translate-y-1 hover:border-amber-200 hover:shadow-lg"
-            >
-              <h3 className="text-2xl font-semibold text-slate-900">{action.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-slate-500">{action.description}</p>
+            <button key={action.path} onClick={() => navigate(action.path)}
+              className={`${action.color} text-white rounded-xl p-7 text-left shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5 relative`}>
+              {action.badge > 0 && (
+                <span className="absolute top-4 right-4 bg-white text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {action.badge}
+                </span>
+              )}
+              <h3 className="text-xl font-bold mb-2">{action.title}</h3>
+              <p className="text-sm opacity-80 leading-6">{action.description}</p>
             </button>
           ))}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          {[
-            ['Total Papers', '0'],
-            ['Approved', '0'],
-            ['In Review', '0'],
-            ['Flagged', '0'],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-              <div className="text-3xl font-semibold text-slate-900">{value}</div>
-              <div className="mt-2 text-sm text-slate-500">{label}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-          <h3 className="text-2xl font-semibold text-slate-900">Scrutinizer Responsibilities</h3>
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {[
-              'Review question papers submitted by faculty members.',
-              'Approve questions that meet academic and quality standards.',
-              'Provide revision notes when improvements are required.',
-              'Ensure alignment with course outcomes and learning objectives.',
-            ].map((item) => (
-              <div key={item} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                {item}
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>

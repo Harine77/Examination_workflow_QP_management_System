@@ -34,12 +34,13 @@ const pdfRoutes         = require('./routes/pdfRoutes');
 const authRoutes        = require('./routes/authRoutes');
 const scrutinizerRoutes = require('./routes/ScrutinizerRoutes.js');
 const hodRoutes         = require('./routes/hodRoutes.js');
+const aiGenerateRoutes  = require('./routes/aiGenerateRoutes.js');
 
 const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:5177', 'http://localhost:5178'],
   credentials: true
 }));
 app.use(express.json());
@@ -52,7 +53,10 @@ app.use('/api/pdf',         pdfRoutes);
 app.use('/api/auth',        authRoutes);
 app.use('/api/scrutinizer', scrutinizerRoutes);
 app.use('/api/hod',         hodRoutes);
+app.use('/api/ai',          aiGenerateRoutes);
+// routes loaded
 
+// AI route registered
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({

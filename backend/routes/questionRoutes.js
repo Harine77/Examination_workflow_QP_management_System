@@ -103,13 +103,8 @@ router.get('/papers', async (req, res) => {
       // Default: show only the papers relevant to each role
       switch (req.user.role) {
         case 'faculty':
-          // Faculty sees their own papers plus finalized papers returned by panel
-          whereClause = {
-            [Op.or]: [
-              { createdBy: req.user.id },
-              { status: 'returned_to_faculties' },
-            ],
-          };
+          // Faculty sees only their own papers
+          whereClause = { createdBy: req.user.id };
           break;
         case 'scrutinizer_1':
           whereClause.status = 'with_scrutinizer1';
@@ -132,14 +127,9 @@ router.get('/papers', async (req, res) => {
       }
     }
     
-    // Faculty default scope is their own papers plus finalized papers returned by panel
+    // Faculty sees only their own papers
     if (req.user.role === 'faculty' && !status) {
-      whereClause = {
-        [Op.or]: [
-          { createdBy: req.user.id },
-          { status: 'returned_to_faculties' },
-        ],
-      };
+      whereClause = { createdBy: req.user.id };
     }
     
     const papers = await QuestionPaper.findAll({
@@ -226,11 +216,11 @@ router.get('/papers/:id', async (req, res) => {
       });
     }
     
-    // Faculty can view their own papers and finalized papers returned by panel
-    if (req.user.role === 'faculty' && paper.createdBy !== req.user.id && paper.status !== 'returned_to_faculties') {
+    // Faculty can only view their own papers
+    if (req.user.role === 'faculty' && paper.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
-        error: 'You can only view your own question papers or finalized papers returned by panel'
+        error: 'You can only view your own question papers'
       });
     }
 
@@ -519,12 +509,7 @@ router.get('/notifications', async (req, res) => {
 
     switch (req.user.role) {
       case 'faculty':
-        whereClause = {
-          [Op.or]: [
-            { createdBy: req.user.id },
-            { status: 'returned_to_faculties' },
-          ],
-        };
+        whereClause = { createdBy: req.user.id };
         break;
       case 'panel_member':
       case 'panel':

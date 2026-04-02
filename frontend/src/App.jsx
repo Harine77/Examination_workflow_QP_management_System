@@ -11,11 +11,18 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import QuestionPapers from './pages/QuestionPapers';
 import CreatePaper from './pages/CreatePaper';
+import AICreatePaper from './pages/AICreatePaper';
 import ScrutinizerMainDashboard from './pages/ScrutinizerMainDashboard';
 import ScrutinizerDashboard from './pages/Scrutinizerdashboard';
 import ScrutinizerFinalPaper from './pages/Scrutinizerfinalpaper';
 import HODDashboard from './pages/HODDashboardV2';
 import PanelDashboard from './pages/PanelDashboardV2';
+import HODPapers from './pages/HODPapers';
+import PanelPapers from './pages/PanelPapers';
+import PanelAwaitingReview from './pages/PanelAwaitingReview';
+import PanelSubmittedToHOD from './pages/PanelSubmittedToHOD';
+import PanelHODApproved from './pages/PanelHODApproved';
+import PanelReturned from './pages/PanelReturned';
 import PaperView from './pages/PaperView';
 
 // Root redirect component that checks auth
@@ -81,14 +88,8 @@ function App() {
               }
             />
 
-            <Route
-              path="/create-paper"
-              element={
-                <PrivateRoute allowedRoles={['faculty']}>
-                  <CreatePaper />
-                </PrivateRoute>
-              }
-            />
+            <Route path="/create-paper" element={<PrivateRoute allowedRoles={['faculty']}><CreatePaper /></PrivateRoute>} />
+            <Route path="/ai-create-paper" element={<PrivateRoute allowedRoles={['faculty']}><AICreatePaper /></PrivateRoute>} />
 
             {/* Scrutinizer Routes */}
             <Route
@@ -141,16 +142,22 @@ function App() {
                 </PrivateRoute>
               }
             />
-
-            {/* Panel Route */}
             <Route
-              path="/panel-dashboard"
+              path="/hod-papers"
               element={
-                <PrivateRoute allowedRoles={['panel', 'panel_member']}>
-                  <PanelDashboard />
+                <PrivateRoute allowedRoles={['hod']}>
+                  <HODPapers />
                 </PrivateRoute>
               }
             />
+
+            {/* Panel Routes */}
+            <Route path="/panel-dashboard" element={<PrivateRoute allowedRoles={['panel', 'panel_member']}><PanelDashboard /></PrivateRoute>} />
+            <Route path="/panel-papers"    element={<PrivateRoute allowedRoles={['panel', 'panel_member']}><PanelPapers /></PrivateRoute>} />
+            <Route path="/panel/awaiting-review" element={<PrivateRoute allowedRoles={['panel', 'panel_member']}><PanelAwaitingReview /></PrivateRoute>} />
+            <Route path="/panel/submitted-to-hod" element={<PrivateRoute allowedRoles={['panel', 'panel_member']}><PanelSubmittedToHOD /></PrivateRoute>} />
+            <Route path="/panel/hod-approved" element={<PrivateRoute allowedRoles={['panel', 'panel_member']}><PanelHODApproved /></PrivateRoute>} />
+            <Route path="/panel/returned" element={<PrivateRoute allowedRoles={['panel', 'panel_member']}><PanelReturned /></PrivateRoute>} />
 
             {/* Root: redirect based on auth status */}
             <Route path="/" element={<RootRedirect />} />

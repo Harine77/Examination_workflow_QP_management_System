@@ -52,7 +52,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(135deg,#f8fbff_0%,#eef4fc_55%,#e6eefb_100%)] px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl grid gap-8 lg:grid-cols-[1.15fr_0.85fr] items-center min-h-[calc(100vh-6rem)]">
         <section className="rounded-[32px] border border-blue-200 bg-[linear-gradient(135deg,#123c8c_0%,#0a2b69_100%)] px-8 py-10 text-white shadow-2xl lg:px-12 lg:py-14">
           <SSNBrand light />

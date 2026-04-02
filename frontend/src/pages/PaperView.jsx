@@ -809,10 +809,10 @@ export default function PaperView() {
               {canPanelReturn && (
                 <ActionBtn
                   disabled={acting}
-                  onClick={() => doAction(`/hod/panel/papers/${paper.id}/return-to-faculties`, { comments: comment }, 'Paper returned to all faculties with an Ollama-generated answer key!')}
+                  onClick={() => doAction(`/hod/panel/papers/${paper.id}/return-to-faculties-simple`, { comments: comment }, 'Paper returned to faculties!')}
                   variant="success"
                 >
-                  {acting ? 'Generating...' : 'Return to Faculties + Answer Key'}
+                  {acting ? 'Processing...' : 'Return to Faculties'}
                 </ActionBtn>
               )}
 
