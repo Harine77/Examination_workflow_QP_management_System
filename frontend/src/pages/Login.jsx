@@ -52,48 +52,44 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
+    <div className="min-h-screen bg-ssn-light flex items-center justify-center py-12 px-4">
+      <div className="w-full max-w-md">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">📝</div>
-          <h2 className="text-4xl font-bold text-indigo-700 mb-2">
-            Welcome Back
-          </h2>
-          <p className="text-gray-600">
-            SSN Question Paper Management System
-          </p>
+        <div className="text-center mb-10">
+          <div className="inline-block bg-ssn-blue text-white rounded-xl p-5 mb-8">
+            <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
+            </svg>
+          </div>
+          <h1 className="text-4xl font-bold text-ssn-dark mb-2">SSN Engineering College</h1>
+          <p className="text-lg text-gray-600 font-normal">Exam Management System</p>
         </div>
 
-        {/* Login Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        {/* Login Card */}
+        <div className="card p-10 shadow-lg">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email */}
+            {/* Email Field */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email Address
-              </label>
+              <label className="form-label">Email Address</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-                placeholder="your.email@example.com"
+                className="form-input"
+                placeholder="faculty@example.com"
                 required
               />
             </div>
 
-            {/* Password */}
+            {/* Password Field */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
-              </label>
+              <label className="form-label">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-                placeholder="Enter your password"
+                className="form-input"
+                placeholder="••••••••"
                 required
               />
             </div>
@@ -102,40 +98,54 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${
+              className={`w-full py-3 rounded-lg font-bold text-white transition-all ${
                 loading
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg hover:shadow-xl'
+                  : 'btn-primary'
               }`}
             >
               {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
 
-          {/* Signup Link */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Don't have an account?{' '}
-              <Link
-                to="/signup"
-                className="text-indigo-600 hover:text-indigo-700 font-semibold"
-              >
-                Sign up here
-              </Link>
-            </p>
+          {/* Divider */}
+          <div className="flex items-center my-6">
+            <div className="flex-1 h-px bg-gray-300"></div>
+            <span className="px-3 text-sm text-gray-500 font-normal">or</span>
+            <div className="flex-1 h-px bg-gray-300"></div>
           </div>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm font-semibold text-gray-700 mb-2">Demo Accounts:</p>
-            <div className="text-xs text-gray-600 space-y-1">
-              <p>📘 <strong>Faculty:</strong> faculty@example.com / faculty123</p>
-              <p>📗 <strong>Scrutinizer 1:</strong> scrutinizer1@example.com / scrutinizer123</p>
-              <p>📗 <strong>Scrutinizer 2:</strong> scrutinizer2@example.com / scrutinizer123</p>
-              <p>📙 <strong>Panel:</strong> panel@example.com / panel123</p>
-              <p>📕 <strong>HOD:</strong> hod@example.com / hod123</p>
+          {/* Signup Link */}
+          <p className="text-center text-gray-700 font-normal">
+            New user?{' '}
+            <Link to="/signup" className="text-ssn-blue font-semibold hover:underline">
+              Create account
+            </Link>
+          </p>
+        </div>
+
+        {/* Demo Credentials */}
+        <div className="mt-8 card p-6">
+          <h3 className="font-semibold text-ssn-dark mb-4 text-center">Demo Credentials</h3>
+          <div className="space-y-3 text-sm">
+            <div className="p-3 bg-ssn-light rounded">
+              <p className="font-semibold text-gray-800">Faculty Account</p>
+              <p className="text-gray-600 text-xs mt-1 font-normal">faculty@example.com / faculty123</p>
+            </div>
+            <div className="p-3 bg-ssn-light rounded">
+              <p className="font-semibold text-gray-800">Scrutinizer 1 Account</p>
+              <p className="text-gray-600 text-xs mt-1 font-normal">scrutinizer1@example.com / scrutinizer123</p>
+            </div>
+            <div className="p-3 bg-ssn-light rounded">
+              <p className="font-semibold text-gray-800">HOD Account</p>
+              <p className="text-gray-600 text-xs mt-1 font-normal">hod@example.com / hod123</p>
             </div>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center text-gray-500 text-sm font-normal">
+          <p>© 2026 SSN Engineering College. All Rights Reserved.</p>
         </div>
       </div>
     </div>

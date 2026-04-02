@@ -273,7 +273,11 @@ const ScrutinizerMainDashboard = () => {
             onClick={() => navigate('/scrutinizer-all-papers')}
             className="card"
           >
-            <div className="card-icon">📋</div>
+            <div className="card-icon">
+              <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
+              </svg>
+            </div>
             <h3>View All Papers</h3>
             <p>Browse and review all question papers currently in the system</p>
           </button>
@@ -282,7 +286,11 @@ const ScrutinizerMainDashboard = () => {
             onClick={() => navigate('/scrutinizer-review')}
             className="card"
           >
-            <div className="card-icon">✍️</div>
+            <div className="card-icon">
+              <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
+              </svg>
+            </div>
             <h3>Papers for Review</h3>
             <p>Access papers pending your scrutinizer feedback and review</p>
           </button>
@@ -291,7 +299,11 @@ const ScrutinizerMainDashboard = () => {
             onClick={() => navigate('/scrutinizer-reviews')}
             className="card"
           >
-            <div className="card-icon">✓</div>
+            <div className="card-icon">
+              <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+              </svg>
+            </div>
             <h3>My Reviews</h3>
             <p>View and manage all your review decisions and feedback history</p>
           </button>

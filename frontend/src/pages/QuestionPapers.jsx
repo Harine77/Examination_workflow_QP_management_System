@@ -102,61 +102,64 @@ const QuestionPapers = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-background">
       <Navbar />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Question Papers</h1>
-          <p className="text-gray-600">
+        <div className="mb-8 pb-6 border-b-2 border-ssn-blue">
+          <h1 className="text-4xl font-bold text-ssn-dark mb-2">Question Papers</h1>
+          <p className="text-lg text-gray-600">
             {statusFilter 
-              ? `Showing ${statusFilter} papers` 
+              ? `Showing: ${statusFilter.replace(/_/g, ' ').toUpperCase()}` 
               : 'All question papers in the system'}
           </p>
         </div>
 
         {/* Filter Buttons */}
-        <div className="flex flex-wrap gap-3 mb-6">
-          <button onClick={() => navigate('/papers')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${!statusFilter ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>All Papers</button>
+        <div className="flex flex-wrap gap-2 mb-8">
+          <button onClick={() => navigate('/papers')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${!statusFilter ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>All Papers</button>
 
           {/* Faculty filters */}
           {user.role === 'faculty' && (<>
-            <button onClick={() => navigate('/papers?status=draft')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'draft' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Draft</button>
-            <button onClick={() => navigate('/papers?status=submitted')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'submitted' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Submitted</button>
-            <button onClick={() => navigate('/papers?status=needs_revision')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'needs_revision' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Needs Revision</button>
+            <button onClick={() => navigate('/papers?status=draft')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'draft' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>Draft</button>
+            <button onClick={() => navigate('/papers?status=submitted')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'submitted' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>Submitted</button>
+            <button onClick={() => navigate('/papers?status=needs_revision')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'needs_revision' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>Needs Revision</button>
           </>)}
 
           {/* Scrutinizer filters */}
           {['scrutinizer', 'scrutinizer_1', 'scrutinizer_2'].includes(user.role) && (<>
-            <button onClick={() => navigate('/papers?status=with_scrutinizer1')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'with_scrutinizer1' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>With S1</button>
-            <button onClick={() => navigate('/papers?status=with_scrutinizer2')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'with_scrutinizer2' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>With S2</button>
+            <button onClick={() => navigate('/papers?status=with_scrutinizer1')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'with_scrutinizer1' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>S1 Review</button>
+            <button onClick={() => navigate('/papers?status=with_scrutinizer2')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'with_scrutinizer2' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>S2 Review</button>
           </>)}
 
           {/* Panel filters */}
           {user.role === 'panel_member' && (<>
-            <button onClick={() => navigate('/papers?status=with_panel')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'with_panel' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>With Panel</button>
-            <button onClick={() => navigate('/papers?status=with_hod')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'with_hod' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>With HOD</button>
-            <button onClick={() => navigate('/papers?status=hod_approved')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'hod_approved' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>HOD Approved</button>
+            <button onClick={() => navigate('/papers?status=with_panel')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'with_panel' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>Panel Review</button>
+            <button onClick={() => navigate('/papers?status=hod_approved')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'hod_approved' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>Approved</button>
           </>)}
 
           {/* HOD filters */}
           {user.role === 'hod' && (<>
-            <button onClick={() => navigate('/papers?status=with_hod')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'with_hod' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Pending</button>
-            <button onClick={() => navigate('/papers?status=hod_approved')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${statusFilter === 'hod_approved' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}>Approved</button>
+            <button onClick={() => navigate('/papers?status=with_hod')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'with_hod' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>For Approval</button>
+            <button onClick={() => navigate('/papers?status=hod_approved')} className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${statusFilter === 'hod_approved' ? 'bg-ssn-blue text-white shadow-md' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}>Approved</button>
           </>)}
         </div>
 
         {/* Papers List */}
         {loading ? (
           <div className="text-center py-12">
-            <div className="text-2xl text-indigo-600">Loading papers...</div>
+            <div className="text-2xl text-ssn-blue font-semibold">Loading papers...</div>
           </div>
         ) : papers.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-            <div className="text-6xl mb-4">📋</div>
-            <h3 className="text-2xl font-bold text-gray-700 mb-2">No Papers Found</h3>
-            <p className="text-gray-600 mb-6">
+          <div className="card p-12 text-center">
+            <div className="flex justify-center mb-4">
+              <svg className="w-16 h-16 text-ssn-blue" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-ssn-dark mb-2">No Papers Found</h3>
+            <p className="text-gray-600 mb-6 text-lg font-normal">
               {user.role === 'faculty' 
                 ? "You haven't created any question papers yet." 
                 : "No papers available in this category."}
@@ -164,40 +167,40 @@ const QuestionPapers = () => {
             {user.role === 'faculty' && (
               <button
                 onClick={() => navigate('/create-paper')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold"
+                className="btn-primary"
               >
-                Create Your First Paper
+                + Create New Paper
               </button>
             )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6">
             {papers.map((paper) => (
-              <div key={paper.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-                <div className="flex justify-between items-start">
+              <div key={paper.id} className="card p-6 hover:shadow-lg transition-shadow border-l-4 border-ssn-blue">
+                <div className="flex justify-between items-start gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-xl font-bold text-gray-800">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="text-xl font-bold text-ssn-dark">
                         {paper.Course?.courseCode} - {paper.Course?.courseName}
                       </h3>
                       {getStatusBadge(paper.status)}
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 mb-3">
                       <div>
-                        <strong>Exam Type:</strong> {paper.examType}
+                        <span className="font-semibold text-gray-800">Exam Type:</span> {paper.examType}
                         {paper.catNumber && ` - ${paper.catNumber}`}
                       </div>
                       <div>
-                        <strong>Created By:</strong> {paper.creator?.username || 'Unknown'}
+                        <span className="font-semibold text-gray-800">Created By:</span> {paper.creator?.username || 'Unknown'}
                       </div>
                       {paper.examDate && (
                         <div>
-                          <strong>Exam Date:</strong> {new Date(paper.examDate).toLocaleDateString()}
+                          <span className="font-semibold text-gray-800">Exam Date:</span> {new Date(paper.examDate).toLocaleDateString()}
                         </div>
                       )}
                       <div>
-                        <strong>Created:</strong> {new Date(paper.createdAt).toLocaleDateString()}
+                        <span className="font-semibold text-gray-800">Created:</span> {new Date(paper.createdAt).toLocaleDateString()}
                       </div>
                     </div>
 

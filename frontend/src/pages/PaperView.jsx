@@ -488,7 +488,7 @@ export default function PaperView() {
         {showActions && (
           <div style={{ background: '#fff', borderRadius: 14, padding: '1.75rem 2rem', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', border: '1px solid #E5E7EB' }}>
             <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
-              {isFaculty ? '📤 Submit Paper' : isS1 ? '🔍 Scrutinizer 1 — Review Actions' : isS2 ? '✅ Scrutinizer 2 — CO/KL Verification & Actions' : isPanel ? '📨 Panel Actions' : '🏛️ HOD Actions'}
+              {isFaculty ? 'Submit Paper' : isS1 ? 'Scrutinizer 1 — Review Actions' : isS2 ? 'Scrutinizer 2 — CO/KL Verification & Actions' : isPanel ? 'Panel Actions' : 'HOD Actions'}
             </h3>
 
             {/* ── S2: CO/KL Verification Panel ── */}
@@ -496,7 +496,7 @@ export default function PaperView() {
               <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
                   <ActionBtn disabled={verifying} onClick={runVerification} variant="warning">
-                    {verifying ? '🔄 Analysing…' : '🔬 Run CO/KL Verification'}
+                    {verifying ? 'Analysing…' : 'Run CO/KL Verification'}
                   </ActionBtn>
                   {verifyData && (
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -636,7 +636,7 @@ export default function PaperView() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {shuffling ? '🔄 Shuffling…' : `🎲 Shuffle & Send to Panel`}
+                      {shuffling ? 'Shuffling…' : 'Shuffle & Send to Panel'}
                     </button>
                   ))}
                 </div>
@@ -706,7 +706,7 @@ export default function PaperView() {
                     onClick={() => doAction(`/scrutinizer/papers/${paper.id}/approve`, { comments: comment }, 'Paper approved — sent to Panel!')}
                     variant="success"
                   >
-                    {acting ? 'Processing…' : '✅ Approve & Send to Panel'}
+                    {acting ? 'Processing…' : 'Approve & Send to Panel'}
                   </ActionBtn>
                   <ActionBtn
                     disabled={acting}
@@ -716,7 +716,7 @@ export default function PaperView() {
                     }}
                     variant="danger"
                   >
-                    {acting ? 'Processing…' : '↩️ Send Back to Faculty'}
+                    {acting ? 'Processing…' : 'Send Back to Faculty'}
                   </ActionBtn>
                 </>
               )}
@@ -777,7 +777,7 @@ export default function PaperView() {
                     }}
                     variant="success"
                   >
-                    {acting ? 'Processing…' : '🏛️ Final Approval (HOD)'}
+                    {acting ? 'Processing…' : 'Final Approval (HOD)'}
                   </ActionBtn>
                   <ActionBtn
                     disabled={acting}
@@ -787,7 +787,7 @@ export default function PaperView() {
                     }}
                     variant="danger"
                   >
-                    {acting ? 'Processing…' : '↩️ Reject & Send Back'}
+                    {acting ? 'Processing…' : 'Reject & Send Back'}
                   </ActionBtn>
                 </>
               )}

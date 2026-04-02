@@ -53,16 +53,20 @@ const PanelDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-amber-100">
+    <div className="min-h-screen bg-ssn-light">
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
         {/* Welcome */}
         <div className="text-center mb-12">
-          <div className="text-7xl mb-4">👥</div>
-          <h1 className="text-5xl font-bold text-gray-800 mb-3">Panel Dashboard</h1>
-          <p className="text-xl text-gray-600">Review and forward question papers to HOD</p>
+          <div className="inline-block bg-ssn-blue text-white rounded-2xl p-5 mb-6">
+            <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+            </svg>
+          </div>
+          <h1 className="text-5xl font-bold text-ssn-dark mb-3">Panel Dashboard</h1>
+          <p className="text-xl text-gray-600 font-normal">Review and forward question papers to HOD</p>
         </div>
 
         {/* User Info */}
@@ -70,39 +74,47 @@ const PanelDashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold text-gray-800">{user?.username}</h3>
-              <p className="text-gray-600">{user?.email}</p>
+              <p className="text-gray-600 font-normal">{user?.email}</p>
             </div>
-            <div className="px-4 py-2 rounded-full bg-yellow-100 text-yellow-700 font-bold">PANEL</div>
+            <div className="px-4 py-2 rounded-full bg-ssn-light text-ssn-blue font-bold text-sm">PANEL</div>
           </div>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 max-w-4xl mx-auto mb-8">
           <div className="bg-white rounded-xl shadow p-6 text-center">
-            <div className="text-3xl font-bold text-yellow-600">{stats.withPanel ?? 0}</div>
-            <div className="text-sm text-gray-600 mt-1">Awaiting Review</div>
+            <div className="text-3xl font-bold text-ssn-blue">{stats.withPanel ?? 0}</div>
+            <div className="text-sm text-gray-600 mt-1 font-normal">Awaiting Review</div>
           </div>
           <div className="bg-white rounded-xl shadow p-6 text-center">
             <div className="text-3xl font-bold text-blue-600">{stats.submitted ?? 0}</div>
-            <div className="text-sm text-gray-600 mt-1">Submitted to HOD</div>
+            <div className="text-sm text-gray-600 mt-1 font-normal">Submitted to HOD</div>
           </div>
           <div className="bg-white rounded-xl shadow p-6 text-center">
             <div className="text-3xl font-bold text-gray-600">{papers.length}</div>
-            <div className="text-sm text-gray-600 mt-1">Total Papers</div>
+            <div className="text-sm text-gray-600 mt-1 font-normal">Total Papers</div>
           </div>
         </div>
 
         {/* Quick Nav */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-10">
-          <button onClick={() => navigate('/papers')} className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left">
-            <div className="text-5xl mb-4">👁️</div>
-            <h3 className="text-2xl font-bold mb-2">View All Papers</h3>
-            <p className="text-sm opacity-90">Browse all question papers in the system</p>
+          <button onClick={() => navigate('/papers')} className="bg-white border-l-4 border-ssn-blue hover:shadow-lg rounded-xl p-8 shadow transition-all text-left">
+            <div className="mb-4 inline-block bg-ssn-light p-3 rounded-lg">
+              <svg className="w-8 h-8 text-ssn-blue" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-ssn-dark mb-2">View All Papers</h3>
+            <p className="text-gray-600 font-normal">Browse all question papers in the system</p>
           </button>
-          <button onClick={() => navigate('/papers?status=with_panel')} className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl p-8 shadow-lg transform hover:scale-105 transition-all text-left">
-            <div className="text-5xl mb-4">✅</div>
-            <h3 className="text-2xl font-bold mb-2">Papers Awaiting Review</h3>
-            <p className="text-sm opacity-90">Open randomized final papers and forward to HOD</p>
+          <button onClick={() => navigate('/papers?status=with_panel')} className="bg-white border-l-4 border-gray-400 hover:shadow-lg rounded-xl p-8 shadow transition-all text-left">
+            <div className="mb-4 inline-block bg-gray-100 p-3 rounded-lg">
+              <svg className="w-8 h-8 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-ssn-dark mb-2">Papers Awaiting Review</h3>
+            <p className="text-gray-600 font-normal">Open randomized final papers and forward to HOD</p>
           </button>
         </div>
 
@@ -112,8 +124,8 @@ const PanelDashboard = () => {
 
           {loading ? (
             <div className="text-center py-12 text-gray-500">
-              <div className="inline-block w-10 h-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mb-3" />
-              <p>Loading papers...</p>
+              <div className="inline-block w-10 h-10 border-4 border-ssn-blue border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="font-normal">Loading papers...</p>
             </div>
           ) : papers.length === 0 ? (
             <div className="bg-white rounded-xl shadow p-10 text-center text-gray-500 border-2 border-dashed border-gray-200">
@@ -128,7 +140,7 @@ const PanelDashboard = () => {
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-bold">{paper.courseCode} - {paper.examType} {paper.catNumber}</h3>
                       {paper.isShuffled && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-400 text-green-900">🎲 Shuffled</span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-400 text-green-900">Shuffled</span>
                       )}
                     </div>
                     <p className="text-sm text-gray-400 mt-1">{paper.courseName} · Created by {paper.createdBy}</p>

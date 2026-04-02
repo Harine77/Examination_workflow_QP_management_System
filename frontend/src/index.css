@@ -1,13 +1,54 @@
-/*this is upadted index css file*/
+/*SSN Engineering College - Professional Styling*/
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Poppins', 'Segoe UI', 'Tahoma', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f7fa;
+  color: #1a202c;
+  font-weight: 400;
 }
+
+/* Typography - Professional */
+h1 { @apply text-4xl font-bold text-ssn-dark tracking-tight; }
+h2 { @apply text-3xl font-bold text-ssn-dark tracking-tight; }
+h3 { @apply text-2xl font-semibold text-ssn-dark tracking-tight; }
+h4 { @apply text-xl font-semibold text-gray-900; }
+p { @apply text-base leading-relaxed text-gray-700 font-normal; }
+label { @apply font-medium text-gray-800; }
+span { @apply font-normal; }
+
+/* Cards */
+.card { @apply bg-white rounded-lg shadow border border-gray-100; }
+.card-hover { @apply hover:shadow-lg transition-shadow cursor-pointer; }
+
+/* Buttons */
+.btn-primary { @apply px-6 py-3 bg-ssn-blue text-white rounded-lg hover:bg-ssn-dark font-semibold transition-all text-base; }
+.btn-secondary { @apply px-6 py-3 bg-white text-ssn-blue border-2 border-ssn-blue rounded-lg hover:bg-ssn-light font-semibold transition-all text-base; }
+.btn-sm { @apply px-4 py-2 text-sm rounded-md font-medium; }
+
+/* Forms */
+.form-input { @apply w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-ssn-blue transition-colors text-base font-normal; }
+.form-label { @apply block text-base font-semibold text-gray-800 mb-2; }
+
+/* Badges */
+.badge { @apply px-3 py-1 rounded-full text-sm font-semibold; }
+.badge-blue { @apply bg-ssn-light text-ssn-blue; }
+.badge-gray { @apply bg-gray-200 text-gray-800; }
+.badge-green { @apply bg-green-100 text-green-700; }
+.badge-red { @apply bg-red-100 text-red-700; }
+
+/* Icon styling */
+.icon-lg { @apply w-12 h-12; }
+.icon-md { @apply w-8 h-8; }
+.icon-sm { @apply w-6 h-6; }
