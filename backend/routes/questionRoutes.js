@@ -61,6 +61,18 @@ router.post('/paper', canCreate, async (req, res) => {
   try {
     const { courseId, examType, catNumber, examDate } = req.body;
     
+    // Check if faculty is enrolled in this course
+    if (req.user.role === 'faculty') {
+      const enrolledCourses = req.user.enrolledCourses || [];
+      if (!enrolledCourses.includes(parseInt(courseId))) {
+        return res.status(403).json({
+          success: false,
+          error: 'Permission denied',
+          message: 'You are not enrolled in this course. Please request enrollment from HOD.'
+        });
+      }
+    }
+    
     const questionPaper = await QuestionPaper.create({
       CourseId: courseId,
       examType,
@@ -96,43 +108,36 @@ router.get('/papers', async (req, res) => {
     
     let whereClause = {};
 
-    // For panel_member: always apply the smart per-course filter regardless of ?status param
-    if (req.user.role === 'panel_member') {
-      const allPanel = await QuestionPaper.findAll({
-        where: { status: 'with_panel' },
-        attributes: ['id', 'CourseId', 'isShuffled', 'createdAt'],
-        order: [['createdAt', 'DESC']],
-      });
-      const courseMap = {};
-      for (const p of allPanel) {
-        const cid = p.CourseId;
-        if (!courseMap[cid]) courseMap[cid] = { shuffledId: null, singleId: null };
-        if (p.isShuffled && !courseMap[cid].shuffledId) courseMap[cid].shuffledId = p.id;
-        else if (!p.isShuffled && !courseMap[cid].singleId) courseMap[cid].singleId = p.id;
-      }
-      const finalIds = Object.values(courseMap).map(g => g.shuffledId || g.singleId).filter(Boolean);
-      whereClause = { id: { [Op.in]: finalIds.length ? finalIds : [0] } };
-    } else if (status) {
+    if (status) {
       // Explicit status filter from query param (non-panel roles)
       whereClause.status = status;
     } else {
       // Default: show only the papers relevant to each role
       switch (req.user.role) {
         case 'faculty':
-          // Faculty sees their own papers at all stages
-          whereClause.createdBy = req.user.id;
+          // Faculty sees only their own papers
+          whereClause = { createdBy: req.user.id };
           break;
         case 'scrutinizer_1':
-          whereClause.status = 'with_scrutinizer1';
+          // Only show papers for courses this scrutinizer is enrolled in
+          // If no courses enrolled, show nothing (strict — not all papers)
+          if (req.user.enrolledCourses && req.user.enrolledCourses.length > 0) {
+            whereClause = {
+              status: 'with_scrutinizer1',
+              CourseId: { [Op.in]: req.user.enrolledCourses }
+            };
+          } else {
+            whereClause = { id: -1 }; // show nothing
+          }
           break;
         case 'scrutinizer_2':
           whereClause.status = { [Op.in]: ['with_scrutinizer2', 'scrutinizer2_approved'] };
           break;
         case 'panel_member':
-          // handled above before the switch
+          whereClause.status = { [Op.in]: ['with_panel', 'with_hod', 'hod_approved', 'returned_to_faculties', 'reviewed', 'finalized', 'randomized'] };
           break;
         case 'hod':
-          whereClause.status = { [Op.in]: ['with_hod', 'hod_approved'] };
+          whereClause.status = { [Op.in]: ['with_hod', 'hod_approved', 'reviewed', 'finalized'] };
           break;
         // Generic scrutinizer — can see both scrutinizer queues
         case 'scrutinizer':
@@ -143,9 +148,9 @@ router.get('/papers', async (req, res) => {
       }
     }
     
-    // Faculty always scoped to their own papers unless they explicitly passed a ?status param
+    // Faculty sees only their own papers
     if (req.user.role === 'faculty' && !status) {
-      whereClause.createdBy = req.user.id;
+      whereClause = { createdBy: req.user.id };
     }
     
     const papers = await QuestionPaper.findAll({
@@ -270,6 +275,327 @@ router.get('/papers/:id', async (req, res) => {
   }
 });
 
+function buildNotificationItem(paper, overrides = {}) {
+  return {
+    id: overrides.id || `${paper.id}-${overrides.category || paper.status}-${overrides.updatedAt || paper.updatedAt}`,
+    paperId: paper.id,
+    courseCode: paper.Course?.courseCode || null,
+    courseName: paper.Course?.courseName || null,
+    status: paper.status,
+    type: overrides.type || 'info',
+    category: overrides.category || 'update',
+    title: overrides.title || `${paper.Course?.courseCode || 'Paper'} update`,
+    message: overrides.message || `Current status: ${paper.status}`,
+    updatedAt: overrides.updatedAt || paper.updatedAt,
+  };
+}
+
+function buildRoleNotifications(role, userId, papers) {
+  const notifications = [];
+
+  for (const paper of papers) {
+    const code = paper.Course?.courseCode || 'Paper';
+
+    if (role === 'faculty') {
+      if (paper.createdBy === userId) {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-created-${paper.id}`,
+          category: 'activity',
+          type: 'info',
+          title: `${code} created by you`,
+          message: 'Your question paper is now in the workflow.',
+          updatedAt: paper.createdAt,
+        }));
+      }
+
+      if (paper.createdBy === userId && paper.status === 'with_scrutinizer1') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-sent-s1-${paper.id}`,
+          category: 'activity',
+          type: 'info',
+          title: `${code} submitted to Scrutinizer 1`,
+          message: 'Your paper has been sent for first-level review.',
+        }));
+      }
+
+      if (paper.createdBy === userId && paper.status === 'with_scrutinizer2') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-sent-s2-${paper.id}`,
+          category: 'update',
+          type: 'info',
+          title: `${code} moved to Scrutinizer 2`,
+          message: paper.scrutinizer1Comments || 'Scrutinizer 1 forwarded your paper for second-level review.',
+        }));
+      }
+
+      if (paper.createdBy === userId && paper.status === 'needs_revision') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-revision-${paper.id}`,
+          category: 'received',
+          type: 'warning',
+          title: `${code} was sent back for revision`,
+          message: paper.scrutinizer2Comments || paper.scrutinizer1Comments || 'Please revise this paper and resubmit it.',
+        }));
+      }
+
+      if (paper.createdBy === userId && ['with_panel', 'randomized'].includes(paper.status)) {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-panel-${paper.id}`,
+          category: 'update',
+          type: 'info',
+          title: `${code} reached panel review`,
+          message: 'Your paper has cleared scrutiny and is now with the panel.',
+        }));
+      }
+
+      if (paper.createdBy === userId && paper.status === 'with_hod') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-hod-${paper.id}`,
+          category: 'update',
+          type: 'info',
+          title: `${code} reached HOD`,
+          message: paper.panelMemberComments || 'The panel has forwarded this paper to HOD.',
+        }));
+      }
+
+      if (paper.createdBy === userId && paper.status === 'hod_approved') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-approved-${paper.id}`,
+          category: 'update',
+          type: 'success',
+          title: `${code} received HOD approval`,
+          message: paper.hodComments || 'Your paper has final HOD approval.',
+        }));
+      }
+
+      if (paper.status === 'returned_to_faculties') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `faculty-returned-${paper.id}`,
+          category: 'received',
+          type: 'success',
+          title: `${code} was returned to faculties`,
+          message: paper.answerKeyGeneratedAt
+            ? 'The finalized paper and answer key are now available to faculty.'
+            : 'The finalized paper is now available to faculty.',
+          updatedAt: paper.answerKeyGeneratedAt || paper.updatedAt,
+        }));
+      }
+    }
+
+    if (['scrutinizer', 'scrutinizer_1'].includes(role)) {
+      if (paper.status === 'with_scrutinizer1') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `s1-received-${paper.id}`,
+          category: 'received',
+          type: 'info',
+          title: `${code} is waiting for your review`,
+          message: `Faculty ${paper.creator?.username || ''} submitted this paper to Scrutinizer 1.`.trim(),
+        }));
+      }
+
+      if (paper.scrutinizer1Id === userId && ['with_scrutinizer2', 'with_panel', 'with_hod', 'hod_approved', 'returned_to_faculties'].includes(paper.status)) {
+        notifications.push(buildNotificationItem(paper, {
+          id: `s1-done-${paper.id}`,
+          category: 'activity',
+          type: 'success',
+          title: `${code} was processed by you`,
+          message: paper.scrutinizer1Comments || 'You completed Scrutinizer 1 review and forwarded the paper.',
+        }));
+      }
+    }
+
+    if (role === 'scrutinizer_2') {
+      if (paper.status === 'with_scrutinizer2') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `s2-received-${paper.id}`,
+          category: 'received',
+          type: 'info',
+          title: `${code} is waiting for Scrutinizer 2`,
+          message: paper.scrutinizer1Comments || 'Scrutinizer 1 forwarded this paper to you.',
+        }));
+      }
+
+      if (paper.scrutinizer2Id === userId && paper.status === 'needs_revision') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `s2-returned-${paper.id}`,
+          category: 'activity',
+          type: 'warning',
+          title: `${code} was returned to faculty by you`,
+          message: paper.scrutinizer2Comments || 'You requested revision from faculty.',
+        }));
+      }
+
+      if (paper.scrutinizer2Id === userId && ['with_panel', 'with_hod', 'hod_approved', 'returned_to_faculties'].includes(paper.status)) {
+        notifications.push(buildNotificationItem(paper, {
+          id: `s2-approved-${paper.id}`,
+          category: 'activity',
+          type: 'success',
+          title: `${code} was approved by you`,
+          message: paper.scrutinizer2Comments || 'You approved this paper and sent it onward.',
+        }));
+      }
+    }
+
+    if (['panel_member', 'panel'].includes(role)) {
+      if (paper.status === 'with_panel') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `panel-received-${paper.id}`,
+          category: 'received',
+          type: 'info',
+          title: `${code} reached the panel`,
+          message: 'This paper is waiting for panel action.',
+        }));
+      }
+
+      if (paper.panelMemberId === userId && paper.status === 'with_hod') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `panel-sent-hod-${paper.id}`,
+          category: 'activity',
+          type: 'info',
+          title: `${code} was sent to HOD by you`,
+          message: paper.panelMemberComments || 'You forwarded this paper to HOD.',
+        }));
+      }
+
+      if (paper.panelMemberId === userId && paper.status === 'hod_approved') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `panel-hod-approved-${paper.id}`,
+          category: 'update',
+          type: 'success',
+          title: `${code} was approved by HOD`,
+          message: paper.hodComments || 'HOD approved the paper you forwarded.',
+        }));
+      }
+
+      if (paper.panelMemberId === userId && paper.status === 'returned_to_faculties') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `panel-returned-${paper.id}`,
+          category: 'activity',
+          type: 'success',
+          title: `${code} was returned to faculties by you`,
+          message: paper.answerKeyGeneratedAt
+            ? 'You shared the finalized paper with an answer key.'
+            : 'You shared the finalized paper with faculties.',
+          updatedAt: paper.answerKeyGeneratedAt || paper.updatedAt,
+        }));
+      }
+    }
+
+    if (role === 'hod') {
+      if (paper.status === 'with_hod') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `hod-received-${paper.id}`,
+          category: 'received',
+          type: 'info',
+          title: `${code} is waiting for HOD approval`,
+          message: paper.panelMemberComments || 'The panel submitted this paper for your approval.',
+        }));
+      }
+
+      if (paper.hodId === userId && paper.status === 'hod_approved') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `hod-approved-${paper.id}`,
+          category: 'activity',
+          type: 'success',
+          title: `${code} was approved by you`,
+          message: paper.hodComments || 'You completed the final approval.',
+        }));
+      }
+
+      if (paper.hodId === userId && paper.status === 'returned_to_faculties') {
+        notifications.push(buildNotificationItem(paper, {
+          id: `hod-after-return-${paper.id}`,
+          category: 'update',
+          type: 'success',
+          title: `${code} was shared with faculties after approval`,
+          message: 'The approved paper has now been returned to faculties with the final materials.',
+          updatedAt: paper.answerKeyGeneratedAt || paper.updatedAt,
+        }));
+      }
+    }
+  }
+
+  return notifications
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .slice(0, 20);
+}
+
+router.get('/notifications', async (req, res) => {
+  try {
+    const Course = require('../models/Course');
+    const User = require('../models/user');
+    const { Op } = require('sequelize');
+
+    let whereClause = {};
+
+    switch (req.user.role) {
+      case 'faculty':
+        whereClause = { createdBy: req.user.id };
+        break;
+      case 'panel_member':
+      case 'panel':
+        whereClause = {
+          [Op.or]: [
+            { status: 'with_panel' },
+            {
+              panelMemberId: req.user.id,
+              status: { [Op.in]: ['with_hod', 'hod_approved', 'returned_to_faculties'] },
+            },
+          ],
+        };
+        break;
+      case 'hod':
+        whereClause = {
+          [Op.or]: [
+            { status: 'with_hod' },
+            { hodId: req.user.id, status: { [Op.in]: ['hod_approved', 'returned_to_faculties'] } },
+          ],
+        };
+        break;
+      case 'scrutinizer':
+      case 'scrutinizer_1':
+        whereClause = {
+          [Op.or]: [
+            { status: 'with_scrutinizer1' },
+            { scrutinizer1Id: req.user.id },
+          ],
+        };
+        break;
+      case 'scrutinizer_2':
+        whereClause = {
+          [Op.or]: [
+            { status: 'with_scrutinizer2' },
+            { scrutinizer2Id: req.user.id },
+          ],
+        };
+        break;
+      default:
+        whereClause = { id: 0 };
+    }
+
+    const papers = await QuestionPaper.findAll({
+      where: whereClause,
+      include: [
+        { model: Course, attributes: ['courseCode', 'courseName'] },
+        { model: User, as: 'creator', attributes: ['username'] },
+      ],
+      order: [['updatedAt', 'DESC']],
+      limit: 12,
+    });
+
+    const notifications = buildRoleNotifications(req.user.role, req.user.id, papers);
+
+    res.json({ success: true, notifications });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch notifications',
+      message: error.message,
+    });
+  }
+});
+
 // Bulk-save questions to a paper (Faculty only, paper must be draft or needs_revision)
 router.post('/papers/:id/questions', canCreate, async (req, res) => {
   try {
@@ -385,8 +711,23 @@ router.post('/papers/:id/submit', canCreate, async (req, res) => {
       });
     }
     
-    // Always routes to Scrutinizer 1 queue
-    await paper.update({ status: 'with_scrutinizer1' });
+    // Always routes to Scrutinizer 1 queue — find one enrolled in this course
+    const courseId = paper.CourseId;
+    let assignedScrutinizer1Id = null;
+
+    if (courseId) {
+      const User = require('../models/user');
+      const scrutinizers = await User.findAll({ where: { role: 'scrutinizer_1', isActive: true } });
+      const enrolled = scrutinizers.filter(s =>
+        Array.isArray(s.enrolledCourses) && s.enrolledCourses.includes(courseId)
+      );
+      if (enrolled.length > 0) assignedScrutinizer1Id = enrolled[0].id;
+    }
+
+    await paper.update({
+      status: 'with_scrutinizer1',
+      scrutinizer1Id: assignedScrutinizer1Id || paper.scrutinizer1Id || null,
+    });
     
     res.json({
       success: true,

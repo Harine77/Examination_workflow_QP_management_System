@@ -1,7 +1,8 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import api from '../services/api';
+import Navbar from '../components/Navbar';
 
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/scrutinizer';
 
@@ -88,26 +89,26 @@ const G = `
 *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
 
 :root {
-  --black:  #0A0A0A;
-  --grey1:  #1A1A1A;
-  --grey2:  #3A3A3A;
-  --grey3:  #6B6B6B;
-  --grey4:  #ABABAB;
-  --grey5:  #D4D4D4;
-  --grey6:  #EFEFEF;
-  --white:  #FAFAFA;
-  --yellow: #F5C400;
-  --yello2: #FFD740;
-  --yello3: #FFF3B0;
-  --yello4: #FFFBEA;
-  --red:    #C0392B;
-  --green:  #1B7A3E;
-  --border: #E0E0E0;
+  --black:  #0f172a;
+  --grey1:  #1e293b;
+  --grey2:  #334155;
+  --grey3:  #64748b;
+  --grey4:  #94a3b8;
+  --grey5:  #cbd5e1;
+  --grey6:  #f1f5f9;
+  --white:  #ffffff;
+  --yellow: #3b82f6;
+  --yello2: #60a5fa;
+  --yello3: #dbeafe;
+  --yello4: #eff6ff;
+  --red:    #ef4444;
+  --green:  #10b981;
+  --border: #e2e8f0;
   --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
   --shadow-lg: 0 8px 40px rgba(0,0,0,0.14);
 }
 
-.sd { font-family:'IBM Plex Sans', sans-serif; background:var(--white); color:var(--black); min-height:100vh; }
+.sd { font-family:'IBM Plex Sans', sans-serif; background:transparent; color:var(--black); min-height:100vh; }
 
 /* ── NAVBAR ── */
 .sd-nav {
@@ -1568,45 +1569,13 @@ function ScrutinizerDashboard() {
   return (
     <>
       <style>{G}</style>
-      <div className="sd">
+      <div className="sd dashboard-bg">
 
-        {/* NAVBAR */}
-        <nav className="sd-nav">
-          <div className="sd-nav-brand">Paper<span>Scrutiny</span></div>
-          <div className="sd-nav-right">
-            <div className="sd-nav-pill">
-              <button className={`sd-nav-tab ${tab==='papers'?'active':''}`}   onClick={() => setTab('papers')}>Papers</button>
-              <button className={`sd-nav-tab ${tab==='pipeline'?'active':''}`} onClick={() => setTab('pipeline')}>Pipeline</button>
-            </div>
-            <button 
-              onClick={handleLogout}
-              style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                color: 'var(--grey4)',
-                padding: '0.5rem 1rem',
-                borderRadius: '6px',
-                fontSize: '0.75rem',
-                fontWeight: '500',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = 'rgba(192, 57, 43, 0.3)';
-                e.target.style.color = '#FF6B6B';
-                e.target.style.borderColor = 'rgba(192, 57, 43, 0.5)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-                e.target.style.color = 'var(--grey4)';
-                e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-              }}
-            >
-              ← Logout
-            </button>
-            <div className="sd-avatar">S</div>
-          </div>
-        </nav>
+        <Navbar />
+        <div style={{ background: 'var(--white)', borderBottom: '1px solid var(--border)', padding: '0.75rem 2rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+           <button style={{ padding: '0.5rem 1.25rem', borderRadius: '50px', fontSize: '0.85rem', fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.2s', background: tab === 'papers' ? 'var(--yellow)' : 'var(--yello4)', color: tab === 'papers' ? 'var(--white)' : 'var(--yellow)' }} onClick={() => setTab('papers')}>Papers</button>
+           <button style={{ padding: '0.5rem 1.25rem', borderRadius: '50px', fontSize: '0.85rem', fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.2s', background: tab === 'pipeline' ? 'var(--yellow)' : 'var(--yello4)', color: tab === 'pipeline' ? 'var(--white)' : 'var(--yellow)' }} onClick={() => setTab('pipeline')}>Pipeline</button>
+        </div>
 
         <div className="sd-main">
 

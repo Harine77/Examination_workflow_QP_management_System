@@ -519,14 +519,14 @@ export default function ScrutinizerFinalPaper() {
                   onClick={fetchData}
                   disabled={syncing}
                 >
-                  🔄 Regenerate
+                  Regenerate
                 </button>
                 <button
                   className="sfp-sync-btn"
                   onClick={handleSyncToDb}
                   disabled={syncing}
                 >
-                  {syncing ? 'Syncing...' : '⬆ Sync to DB'}
+                  {syncing ? 'Syncing...' : 'Sync to DB'}
                 </button>
               </div>
             )}

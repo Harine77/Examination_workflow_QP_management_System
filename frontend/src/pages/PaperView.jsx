@@ -14,6 +14,7 @@ const STATUS_CFG = {
   scrutinizer2_approved: { label: 'S2 Approved',           color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
   randomized:            { label: 'Randomized',            color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
   with_panel:            { label: 'With Panel',            color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC' },
+  returned_to_faculties: { label: 'Returned to Faculties', color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
   with_hod:              { label: 'With HOD',              color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
   hod_approved:          { label: 'HOD Approved',          color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
   submitted:             { label: 'Submitted',             color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
@@ -27,6 +28,7 @@ const WORKFLOW = [
   { key: 'with_scrutinizer2',     label: 'Scrutinizer 2' },
   { key: 'scrutinizer2_approved', label: 'S2 Approved' },
   { key: 'with_panel',            label: 'Panel' },
+  { key: 'returned_to_faculties', label: 'Faculties' },
   { key: 'with_hod',              label: 'HOD' },
   { key: 'hod_approved',          label: 'Final Approved' },
 ];
@@ -343,8 +345,11 @@ export default function PaperView() {
   const isFaculty   = role === 'faculty';
   const isS1        = ['scrutinizer_1', 'scrutinizer'].includes(role) && s === 'with_scrutinizer1';
   const isS2        = ['scrutinizer_2', 'scrutinizer'].includes(role) && s === 'with_scrutinizer2';
-  const isPanel     = role === 'panel_member' && ['with_panel', 'randomized'].includes(s);
+  const isPanel     = role === 'panel_member' && ['with_panel', 'randomized', 'with_hod', 'hod_approved'].includes(s);
+  const canPanelSubmit = role === 'panel_member' && ['with_panel', 'randomized'].includes(s);
+  const canPanelReturn = role === 'panel_member' && ['with_panel', 'randomized', 'with_hod', 'hod_approved'].includes(s);
   const isHOD       = role === 'hod' && s === 'with_hod';
+  const hasAnswerKey = Array.isArray(paper.answerKey?.items) && paper.answerKey.items.length > 0;
   const showActions = (isFaculty && ['draft','needs_revision'].includes(s)) || isS1 || isS2 || isPanel || isHOD;
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -485,6 +490,75 @@ export default function PaperView() {
         </div>
 
         {/* ── Action Panel ── */}
+        {hasAnswerKey && (
+          <div style={{ background: '#fff', borderRadius: 14, padding: '1.5rem 1.75rem', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', border: '1px solid #CCFBF1', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#134E4A' }}>Answer Key</h3>
+                <p style={{ margin: '0.35rem 0 0', fontSize: '0.84rem', color: '#0F766E' }}>
+                  Generated locally via Ollama{paper.answerKeyModel ? ` (${paper.answerKeyModel})` : ''}.
+                </p>
+              </div>
+              {paper.answerKeyGeneratedAt && (
+                <span style={{ fontSize: '0.75rem', color: '#115E59', background: '#F0FDFA', border: '1px solid #99F6E4', borderRadius: 999, padding: '0.35rem 0.75rem', fontWeight: 700 }}>
+                  {new Date(paper.answerKeyGeneratedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            {paper.answerKey?.overview && (
+              <div style={{ background: '#F8FAFC', border: '1px solid #E5E7EB', borderRadius: 10, padding: '0.85rem 1rem', marginBottom: '1rem', color: '#334155', fontSize: '0.88rem', lineHeight: 1.6 }}>
+                {paper.answerKey.overview}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              {paper.answerKey.items.map((item, index) => (
+                <div key={`${item.part}-${item.questionNumber}-${index}`} style={{ border: '1px solid #D1FAE5', borderRadius: 12, padding: '1rem 1.1rem', background: '#FAFFFE' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                    <div style={{ fontWeight: 800, color: '#0F172A' }}>
+                      Part {item.part} · Q{item.questionNumber}
+                    </div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F766E', background: '#CCFBF1', borderRadius: 999, padding: '0.25rem 0.65rem' }}>
+                      {item.marks} marks
+                    </span>
+                  </div>
+
+                  <div style={{ color: '#1F2937', fontSize: '0.9rem', lineHeight: 1.65, marginBottom: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                    {item.answerKey}
+                  </div>
+
+                  {Array.isArray(item.keyPoints) && item.keyPoints.length > 0 && (
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F766E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.35rem' }}>
+                        Key Points
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#334155', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                        {item.keyPoints.map((point, pointIndex) => (
+                          <li key={pointIndex}>{point}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {Array.isArray(item.markingScheme) && item.markingScheme.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0F766E', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.35rem' }}>
+                        Marking Scheme
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#334155', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                        {item.markingScheme.map((step, stepIndex) => (
+                          <li key={stepIndex}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {showActions && (
           <div style={{ background: '#fff', borderRadius: 14, padding: '1.75rem 2rem', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', border: '1px solid #E5E7EB' }}>
             <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
@@ -643,11 +717,11 @@ export default function PaperView() {
               </div>
             )}
 
-            {/* Comment textarea for scrutinizers */}
-            {(isS1 || isS2) && (
+            {/* Comment textarea for review stages */}
+            {(isS1 || isS2 || isPanel) && (
               <div style={{ marginBottom: '1.25rem' }}>
                 <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>
-                  {isS1 ? 'Comments for Scrutinizer 2 (optional)' : 'Final review comments (optional)'}
+                  {isS1 ? 'Comments for Scrutinizer 2 (optional)' : isS2 ? 'Final review comments (optional)' : 'Panel comments (optional)'}
                 </label>
                 <textarea
                   value={comment}
@@ -722,13 +796,23 @@ export default function PaperView() {
               )}
 
               {/* Panel */}
-              {isPanel && (
+              {canPanelSubmit && (
                 <ActionBtn
                   disabled={acting}
                   onClick={() => doAction(`/questions/papers/${paper.id}/panel-approve`, {}, 'Paper forwarded to HOD!')}
                   variant="primary"
                 >
                   {acting ? 'Processing…' : '📨 Approve & Forward to HOD'}
+                </ActionBtn>
+              )}
+
+              {canPanelReturn && (
+                <ActionBtn
+                  disabled={acting}
+                  onClick={() => doAction(`/hod/panel/papers/${paper.id}/return-to-faculties-simple`, { comments: comment }, 'Paper returned to faculties!')}
+                  variant="success"
+                >
+                  {acting ? 'Processing...' : 'Return to Faculties'}
                 </ActionBtn>
               )}
 

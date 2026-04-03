@@ -2,18 +2,19 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import { toast } from 'react-toastify';
+import SSNBrand from '../components/SSNBrand';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       toast.error('Please fill in all fields');
       return;
@@ -23,11 +24,10 @@ const Login = () => {
     try {
       const response = await login(email, password);
       const userRole = response.data.data?.role;
-      
-      toast.success('Login successful!');
-      
-      // Navigate based on role
-      switch(userRole) {
+
+      toast.success('Login successful');
+
+      switch (userRole) {
         case 'scrutinizer':
         case 'scrutinizer_1':
         case 'scrutinizer_2':
@@ -52,91 +52,92 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">📝</div>
-          <h2 className="text-4xl font-bold text-indigo-700 mb-2">
-            Welcome Back
-          </h2>
-          <p className="text-gray-600">
-            SSN Question Paper Management System
-          </p>
-        </div>
+    <div className="min-h-screen px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl grid gap-8 lg:grid-cols-[1.15fr_0.85fr] items-center min-h-[calc(100vh-6rem)]">
+        <section className="rounded-[32px] border border-blue-200 bg-[linear-gradient(135deg,#123c8c_0%,#0a2b69_100%)] px-8 py-10 text-white shadow-2xl lg:px-12 lg:py-14">
+          <SSNBrand light />
+          <div className="mt-10 max-w-2xl">
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-100">Academic Workflow Portal</div>
+            <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">Structured question paper governance for SSN College of Engineering.</h1>
+            <p className="mt-5 text-base leading-7 text-blue-50/90 sm:text-lg">
+              Manage faculty submissions, scrutiny, panel review, HOD approval, and answer-key generation in one professional workflow.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="text-2xl font-semibold">Faculty</div>
+              <div className="mt-1 text-sm text-blue-100/80">Create and track papers</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="text-2xl font-semibold">Scrutiny</div>
+              <div className="mt-1 text-sm text-blue-100/80">Review with workflow control</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="text-2xl font-semibold">Approval</div>
+              <div className="mt-1 text-sm text-blue-100/80">Panel and HOD decisions</div>
+            </div>
+          </div>
+        </section>
 
-        {/* Login Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email */}
+        <section className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-xl sm:p-10">
+          <div className="mb-8">
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Sign In</div>
+            <h2 className="mt-3 font-serif text-3xl text-slate-900">Access your workspace</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Use your institutional account to continue to the SSN question paper portal.</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email Address
-              </label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Email Address</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
-                placeholder="your.email@example.com"
+                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-700 focus:bg-white"
+                placeholder="name@ssn.edu.in"
                 required
               />
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
-              </label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition-colors"
+                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 outline-none transition focus:border-blue-700 focus:bg-white"
                 placeholder="Enter your password"
                 required
               />
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${
-                loading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg hover:shadow-xl'
-              }`}
+              className={`w-full rounded-2xl py-3 font-semibold text-white transition-all ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0a2b69] hover:bg-[#123c8c] shadow-lg'}`}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Signing in...' : 'Login'}
             </button>
           </form>
 
-          {/* Signup Link */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Don't have an account?{' '}
-              <Link
-                to="/signup"
-                className="text-indigo-600 hover:text-indigo-700 font-semibold"
-              >
-                Sign up here
-              </Link>
-            </p>
+          <div className="mt-6 text-center text-sm text-slate-600">
+            Don&apos;t have an account?{' '}
+            <Link to="/signup" className="font-semibold text-blue-700 hover:text-blue-800">
+              Create an account
+            </Link>
           </div>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm font-semibold text-gray-700 mb-2">Demo Accounts:</p>
-            <div className="text-xs text-gray-600 space-y-1">
-              <p>📘 <strong>Faculty:</strong> faculty@example.com / faculty123</p>
-              <p>📗 <strong>Scrutinizer 1:</strong> scrutinizer1@example.com / scrutinizer123</p>
-              <p>📗 <strong>Scrutinizer 2:</strong> scrutinizer2@example.com / scrutinizer123</p>
-              <p>📙 <strong>Panel:</strong> panel@example.com / panel123</p>
-              <p>📕 <strong>HOD:</strong> hod@example.com / hod123</p>
+          <div className="mt-8 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+            <div className="text-sm font-semibold text-slate-800">Demo Accounts</div>
+            <div className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+              <p><strong>Faculty:</strong> faculty@example.com / faculty123</p>
+              <p><strong>Scrutinizer 1:</strong> scrutinizer1@example.com / scrutinizer123</p>
+              <p><strong>Scrutinizer 2:</strong> scrutinizer2@example.com / scrutinizer123</p>
+              <p><strong>Panel:</strong> panel@example.com / panel123</p>
+              <p><strong>HOD:</strong> hod@example.com / hod123</p>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
