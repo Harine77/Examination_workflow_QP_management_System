@@ -104,6 +104,60 @@ Released During Examination
 
 ---
 
+## ✨ Screenshots
+
+### 🔐 Login Page
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/3a0c7762-3e60-4eb5-954b-e79726a86e0e" width="850"/>
+</p>
+
+---
+
+### 👨‍🏫 Faculty Dashboard
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/e3ca4e22-be81-470f-b079-f4746b55f2e9" width="850"/>
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/5d8dac37-174c-44d0-8e8e-bc183cab183a" width="850"/>
+</p>
+
+---
+
+### 📝 Scrutinizer Dashboard
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/b35b104a-bbac-4a98-adaf-18b1159d3b6f" width="850"/>
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/9445998c-2553-4ec5-900e-ad4342b4eda0" width="850"/>
+</p>
+
+---
+
+### 👥 Panel Member Dashboard
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/3af84894-423e-47b6-b2e9-3ec2fa22cac4" width="850"/>
+</p>
+
+---
+
+### 🎓 HOD Dashboard
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f2e66a3c-05fc-41a6-93b2-f03b4f952341" width="850"/>
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a1a5bc7c-f9d2-45f4-87fc-781620ea14a5" width="850"/>
+</p>
+
+
+
 ## 🛠 Technology Stack
 
 ### Frontend
